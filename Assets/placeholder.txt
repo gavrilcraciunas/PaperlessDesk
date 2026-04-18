@@ -1,0 +1,7 @@
+Place your app assets here:
+  StoreLogo.png        50x50
+  Square44x44.png      44x44
+  Square150x150.png    150x150
+  SplashScreen.png     620x300
+  Wide310x150.png      310x150
+  paperless.ico        app icon

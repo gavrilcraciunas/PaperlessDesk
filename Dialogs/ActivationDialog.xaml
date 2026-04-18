@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="PaperlessDesktop.Dialogs.ActivationDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Activate Pro"
+    PrimaryButtonText="Activate"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary">
+    <StackPanel Spacing="12" MinWidth="340">
+        <TextBlock Text="Enter your details to unlock all Pro features."
+                   TextWrapping="Wrap" Opacity="0.7"/>
+        <TextBox     x:Name="UserIdBox" Header="Email or name"
+                     PlaceholderText="e.g. john@company.com"/>
+        <PasswordBox x:Name="KeyBox"    Header="License key"
+                     PlaceholderText="PAPERLESS-XXXX-XXXX"/>
+    </StackPanel>
+</ContentDialog>

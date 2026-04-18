@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="PaperlessDesktop.Dialogs.AboutDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="About Paperless Desktop"
+    CloseButtonText="Close">
+    <StackPanel Spacing="10" MinWidth="360">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="Paperless Desktop" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+            <Border Background="{ThemeResource SystemAccentColor}" CornerRadius="4" Padding="6,2">
+                <TextBlock Text="v2.0.0" FontSize="11" Foreground="White" FontWeight="Bold"/>
+            </Border>
+        </StackPanel>
+        <TextBlock Text="Your offline document toolkit. PDF, images, Word — no cloud needed."
+                   TextWrapping="Wrap" Opacity="0.7"/>
+        <TextBlock Text="100% offline  |  No cloud  |  No telemetry"
+                   FontSize="12" Opacity="0.6"/>
+        <HyperlinkButton Content="support@paperlessdesktop.app"
+                         NavigateUri="mailto:support@paperlessdesktop.app"/>
+    </StackPanel>
+</ContentDialog>

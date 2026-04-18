@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "PaperlessDesktop": {
+      "commandName": "Project",
+      "workingDirectory": "C:\\Users\\Gavril\\PaperlessDesktop"
+    }
+  }
+}
