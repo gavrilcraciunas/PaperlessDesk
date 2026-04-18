@@ -64,4 +64,17 @@ public sealed partial class PreviewPane : UserControl
         // TODO: implement text search using Windows.Data.Pdf.PdfPage.GetTextRanges()
         // See roadmap Step 8
     }
+
+    public void Clear()
+    {
+        _pdf = null;
+        _currentPage = 0;
+        _totalPages = 0;
+        PageImage.Source = null;
+        FileNameBlock.Text = "";
+        PageLabel.Text = "";
+        EmptyState.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+        PrevPageBtn.IsEnabled = false;
+        NextPageBtn.IsEnabled = false;
+    }
 }

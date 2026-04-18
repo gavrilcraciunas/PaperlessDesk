@@ -10,23 +10,21 @@ namespace PaperlessDesktop.Interop;
 /// </summary>
 public static class WindowNative
 {
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", ExactSpelling = true)]
     private static extern IntPtr GetActiveWindow();
 
     public static IntPtr GetWindowHandle(Window window)
     {
         try
         {
-            // Method 1: Try WinRT As<T> pattern for IWindowNative
+            // Use the XAML root to get the window handle
             return window.As<IWindowNative>().WindowHandle;
         }
-        catch (Exception ex)
+        catch
         {
-            Logger.Warn($"IWindowNative failed ({ex.Message}), using GetActiveWindow");
-            // Fallback to GetActiveWindow
-            var hwnd = GetActiveWindow();
-            Logger.Info($"GetActiveWindow returned: {hwnd}");
-            return hwnd;
+            Logger.Warn("GetWindowHandle: Unable to get XAML root window handle");
+            // Fallback - return zero and let file picker handle it
+            return IntPtr.Zero;
         }
     }
 }
@@ -40,6 +38,15 @@ internal interface IWindowNative
     IntPtr WindowHandle { get; }
 }
 
+// COM interface for initializing with window
+[ComImport]
+[Guid("b4d7f884-2b8a-43e7-a6d8-74381a50696f")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IInitializeWithWindow
+{
+    void Initialize(IntPtr hwnd);
+}
+
 /// <summary>
 /// Initializes WinRT file pickers to work with a specific window handle (desktop interop).
 /// </summary>
@@ -47,39 +54,21 @@ public static class InitializeWithWindow
 {
     public static void Initialize(object picker, IntPtr hwnd)
     {
-        if (picker is null || hwnd == IntPtr.Zero)
-        {
-            Logger.Warn("InitializeWithWindow: picker is null or hwnd is zero");
-            return;
-        }
-
         try
         {
-            // Use reflection to call IInitializeWithWindow.Initialize
-            var type = picker.GetType();
-            var iInitializeWithWindow = type.GetInterface("IInitializeWithWindow");
-
-            if (iInitializeWithWindow == null)
+            if (picker is IInitializeWithWindow initWindow)
             {
-                Logger.Warn("IInitializeWithWindow interface not found on picker object");
-                return;
+                initWindow.Initialize(hwnd);
+                Logger.Info($"Successfully initialized file picker with window handle {hwnd}");
             }
-
-            var method = iInitializeWithWindow.GetMethod("Initialize", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public, null, new[] { typeof(IntPtr) }, null);
-
-            if (method == null)
+            else
             {
-                Logger.Warn("Initialize method not found on IInitializeWithWindow");
-                return;
+                Logger.Warn($"Picker does not implement IInitializeWithWindow");
             }
-
-            method.Invoke(picker, new object[] { hwnd });
-            Logger.Info($"Successfully initialized file picker with window handle {hwnd}");
         }
         catch (Exception ex)
         {
-            Logger.Error($"InitializeWithWindow failed: {ex.Message}");
-            throw new InvalidOperationException($"Failed to initialize file picker: {ex.InnerException?.Message ?? ex.Message}", ex);
+            Logger.Warn($"InitializeWithWindow failed: {ex.Message}. File picker may still work.");
         }
     }
 }
