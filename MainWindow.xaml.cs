@@ -143,23 +143,131 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var hwnd = WindowNative.GetWindowHandle(this);
-            var picker = new FileOpenPicker();
-            InitializeWithWindow.Initialize(picker, hwnd);
-            foreach (var ext in new[] { ".pdf", ".png", ".jpg", ".jpeg", ".docx", ".csv", ".xlsx" })
-                picker.FileTypeFilter.Add(ext);
-            picker.ViewMode = PickerViewMode.List;
-            var files = await picker.PickMultipleFilesAsync();
+            Logger.Info("AddBtn_Click: Starting file picker");
+            var files = await PickMultipleFiles();
             if (files?.Count > 0)
+            {
+                Logger.Info($"Adding {files.Count} files to view model");
                 ViewModel.AddFiles(files.Select(f => f.Path));
+                RefreshButtonStates();
+                Logger.Info("Files added successfully");
+            }
         }
         catch (COMException comEx) when (comEx.HResult == unchecked((int)0x80070578))
         {
-            await Err("File Picker Error", "Could not open file picker. Try restarting the app.");
+            Logger.Error($"COMException 0x80070578: {comEx}");
+            await Err("File Picker Error", "Invalid window handle. Please try restarting the app.");
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.Info("File picker operation cancelled by user");
         }
         catch (Exception ex)
         {
-            await Err("Error", $"Failed to open file picker: {ex.Message}");
+            Logger.Error($"AddBtn_Click error: {ex}");
+            await Err("Error", $"An error occurred: {ex.Message}");
+        }
+    }
+
+    private async Task<IReadOnlyList<StorageFile>?> PickMultipleFiles()
+    {
+        Logger.Info("PickMultipleFiles: Starting");
+
+        // Get window handle
+        Logger.Info("Getting window handle...");
+        var hwnd = WindowNative.GetWindowHandle(this);
+        Logger.Info($"Window handle obtained: {hwnd}");
+
+        // Try WinRT picker first
+        try
+        {
+            Logger.Info("Attempting WinRT FileOpenPicker...");
+
+            // Create and configure the picker
+            var picker = new FileOpenPicker();
+            picker.FileTypeFilter.Add(".pdf");
+            picker.FileTypeFilter.Add(".png");
+            picker.FileTypeFilter.Add(".jpg");
+            picker.FileTypeFilter.Add(".jpeg");
+            picker.FileTypeFilter.Add(".docx");
+            picker.FileTypeFilter.Add(".csv");
+            picker.FileTypeFilter.Add(".xlsx");
+            picker.ViewMode = PickerViewMode.List;
+            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+
+            // Try to initialize with window if we have a valid handle
+            if (hwnd != IntPtr.Zero)
+            {
+                Logger.Info("Initializing picker with window...");
+                InitializeWithWindow.Initialize(picker, hwnd);
+                Logger.Info("Picker initialization completed");
+            }
+            else
+            {
+                Logger.Warn("No valid window handle for picker initialization");
+            }
+
+            // Call the picker
+            Logger.Info("Calling PickMultipleFilesAsync");
+            var files = await picker.PickMultipleFilesAsync();
+            Logger.Info($"✓ PickMultipleFilesAsync succeeded, returned {files?.Count ?? 0} files");
+            return files;
+        }
+        catch (COMException comEx) when (comEx.HResult == unchecked((int)0x80070578))
+        {
+            Logger.Warn($"WinRT picker failed with 0x80070578 (Invalid window handle)");
+            Logger.Info("Falling back to Win32 file dialog...");
+
+            // Fallback to Win32 native dialog
+            if (hwnd != IntPtr.Zero)
+            {
+                try
+                {
+                    var filter = "PDF Files|*.pdf|Image Files|*.png;*.jpg;*.jpeg|Document Files|*.docx;*.csv;*.xlsx|All Files|*.*";
+                    var filePaths = Win32FileDialog.OpenFileDialog(hwnd, "Select Files to Add", filter);
+
+                    if (filePaths.Length > 0)
+                    {
+                        Logger.Info($"Win32 dialog returned {filePaths.Length} file(s)");
+                        // Convert file paths to StorageFile objects
+                        var files = new List<StorageFile>();
+                        foreach (var path in filePaths)
+                        {
+                            try
+                            {
+                                var file = await StorageFile.GetFileFromPathAsync(path);
+                                files.Add(file);
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Warn($"Could not load file {path}: {ex.Message}");
+                            }
+                        }
+                        Logger.Info($"✓ Successfully converted {files.Count} file(s) to StorageFile");
+                        return files;
+                    }
+                    else
+                    {
+                        Logger.Info("Win32 dialog was cancelled by user");
+                        return null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Win32 file dialog failed: {ex.GetType().Name}: {ex.Message}");
+                    throw;
+                }
+            }
+            else
+            {
+                Logger.Error("No valid window handle for Win32 dialog fallback");
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"PickMultipleFilesAsync failed: {ex.GetType().Name}: {ex.Message}");
+            throw;
         }
     }
 
@@ -535,11 +643,32 @@ public sealed partial class MainWindow : Window
 
     private async Task<string?> SaveFile(string suggested, string ext)
     {
-        var p = new FileSavePicker();
-        InitializeWithWindow.Initialize(p, WindowNative.GetWindowHandle(this));
-        p.SuggestedFileName = suggested;
-        p.FileTypeChoices.Add(ext.TrimStart('.').ToUpperInvariant(), new List<string> { ext });
-        return (await p.PickSaveFileAsync())?.Path;
+        Logger.Info($"SaveFile: Starting (suggested={suggested}, ext={ext})");
+        try
+        {
+            var p = new FileSavePicker();
+            Logger.Info("SaveFile: Created FileSavePicker");
+
+            var hwnd = WindowNative.GetWindowHandle(this);
+            Logger.Info($"SaveFile: Got window handle: {hwnd}");
+
+            InitializeWithWindow.Initialize(p, hwnd);
+            Logger.Info("SaveFile: Initialized with window");
+
+            p.SuggestedFileName = suggested;
+            p.FileTypeChoices.Add(ext.TrimStart('.').ToUpperInvariant(), new List<string> { ext });
+
+            Logger.Info("SaveFile: Calling PickSaveFileAsync");
+            var result = await p.PickSaveFileAsync();
+            var path = result?.Path;
+            Logger.Info($"SaveFile: ✓ Succeeded, returned: {path}");
+            return path;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"SaveFile: Failed with {ex.GetType().Name}: {ex.Message}");
+            throw;
+        }
     }
 
     private async Task<string?> OpenFile(string ext)
