@@ -1,11 +1,9 @@
+using Microsoft.UI.Xaml.Media;
 using PaperlessDesktop.Dialogs;
+using PaperlessDesktop.Interop;
 using PaperlessDesktop.Services;
 using PaperlessDesktop.ViewModels;
-using PaperlessDesktop.Interop;
-using PaperlessDesktop.Shared;
 using System.Runtime.InteropServices;
-using Microsoft.UI;
-using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 
 namespace PaperlessDesktop;
@@ -67,27 +65,22 @@ public sealed partial class MainWindow : Window
 
     // ── Button state management ───────────────────────────────────────────────
 
-    /// <summary>
-    /// Called whenever selection or file list changes.
-    /// Enables/disables every action button based on what's selected.
-    /// </summary>
     private void RefreshButtonStates()
     {
-        var sel         = FileListView.SelectedItems.Cast<FileItemViewModel>().ToList();
-        var selPdfs     = sel.Where(f => IsPdf(f.FilePath)).ToList();
-        var selImages   = sel.Where(f => IsImage(f.FilePath)).ToList();
-        var allPdfs     = ViewModel.Files.Where(f => IsPdf(f.FilePath)).ToList();
-        bool hasPdfs    = allPdfs.Count > 0;
-        bool oneSelPdf  = selPdfs.Count == 1;
+        var sel = FileListView.SelectedItems.Cast<FileItemViewModel>().ToList();
+        var selPdfs = sel.Where(f => IsPdf(f.FilePath)).ToList();
+        var selImages = sel.Where(f => IsImage(f.FilePath)).ToList();
+        var allPdfs = ViewModel.Files.Where(f => IsPdf(f.FilePath)).ToList();
+        bool hasPdfs = allPdfs.Count > 0;
+        bool oneSelPdf = selPdfs.Count == 1;
         bool manySelPdf = selPdfs.Count >= 2;
-        bool anySelPdf  = selPdfs.Count >= 1;
-        bool anySelImg  = selImages.Count >= 1;
-        bool anySel     = sel.Count >= 1;
+        bool anySelImg = selImages.Count >= 1;
+        bool anySel = sel.Count >= 1;
 
         // Sidebar controls
         RemoveBtn.IsEnabled = anySel;
-        ClearBtn.IsEnabled  = ViewModel.Files.Count > 0;
-        MoveUpBtn.IsEnabled   = anySel && sel.Count == 1 &&
+        ClearBtn.IsEnabled = ViewModel.Files.Count > 0;
+        MoveUpBtn.IsEnabled = anySel && sel.Count == 1 &&
                                 ViewModel.Files.IndexOf(sel[0]) > 0;
         MoveDownBtn.IsEnabled = anySel && sel.Count == 1 &&
                                 ViewModel.Files.IndexOf(sel[0]) < ViewModel.Files.Count - 1;
@@ -97,35 +90,32 @@ public sealed partial class MainWindow : Window
             ? Visibility.Visible : Visibility.Collapsed;
 
         // PDF tab
-        BtnMerge.IsEnabled        = manySelPdf;
-        BtnRemovePages.IsEnabled  = oneSelPdf;
-        BtnRotate.IsEnabled       = oneSelPdf;
-        BtnInsert.IsEnabled       = oneSelPdf;
-        BtnPassword.IsEnabled     = oneSelPdf;
-        BtnUnlock.IsEnabled       = oneSelPdf;
-        BtnMetadata.IsEnabled     = oneSelPdf;
+        BtnMerge.IsEnabled = manySelPdf;
+        BtnRemovePages.IsEnabled = oneSelPdf;
+        BtnRotate.IsEnabled = oneSelPdf;
+        BtnInsert.IsEnabled = oneSelPdf;
+        BtnPassword.IsEnabled = oneSelPdf;
+        BtnUnlock.IsEnabled = oneSelPdf;
+        BtnMetadata.IsEnabled = oneSelPdf;
 
         // Pro tab
-        BtnOcr.IsEnabled          = oneSelPdf;
-        BtnToDocx.IsEnabled       = oneSelPdf;
-        BtnToImages.IsEnabled     = oneSelPdf;
-        BtnFromImages.IsEnabled   = anySelImg;
-        BtnCompress.IsEnabled     = oneSelPdf;
-        BtnSplit.IsEnabled        = oneSelPdf;
+        BtnOcr.IsEnabled = oneSelPdf;
+        BtnToDocx.IsEnabled = oneSelPdf;
+        BtnToImages.IsEnabled = oneSelPdf;
+        BtnFromImages.IsEnabled = anySelImg;
+        BtnCompress.IsEnabled = oneSelPdf;
+        BtnSplit.IsEnabled = oneSelPdf;
 
-        // Batch tab — operate on selection or all PDFs
-        bool batchReady = hasPdfs;
-        BtnBatchCompress.IsEnabled  = batchReady;
-        BtnBatchOcr.IsEnabled       = batchReady;
-        BtnBatchRemove.IsEnabled    = batchReady;
-        BtnBatchRotate.IsEnabled    = batchReady;
-        BtnBatchToImages.IsEnabled  = batchReady;
-        BtnExportReport.IsEnabled   = ViewModel.LastBatchResult is not null;
+        // Batch tab
+        BtnBatchCompress.IsEnabled = hasPdfs;
+        BtnBatchOcr.IsEnabled = hasPdfs;
+        BtnBatchRemove.IsEnabled = hasPdfs;
+        BtnBatchRotate.IsEnabled = hasPdfs;
+        BtnBatchToImages.IsEnabled = hasPdfs;
+        BtnExportReport.IsEnabled = ViewModel.LastBatchResult is not null;
 
-        // Selection status in status bar
-        SelectionCountBlock.Text = sel.Count > 0
-            ? $"{sel.Count} selected"
-            : "";
+        // Selection status
+        SelectionCountBlock.Text = sel.Count > 0 ? $"{sel.Count} selected" : "";
     }
 
     private static bool IsPdf(string path) =>
@@ -148,7 +138,10 @@ public sealed partial class MainWindow : Window
             if (files?.Count > 0)
             {
                 Logger.Info($"Adding {files.Count} files to view model");
-                ViewModel.AddFiles(files.Select(f => f.Path));
+                // FIX: filter out duplicates already in the list
+                var existing = ViewModel.Files.Select(f => f.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var newPaths = files.Select(f => f.Path).Where(p => !existing.Contains(p));
+                ViewModel.AddFiles(newPaths);
                 RefreshButtonStates();
                 Logger.Info("Files added successfully");
             }
@@ -169,100 +162,62 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Opens the WinRT file picker. Falls back to native Win32 dialog if the
+    /// WinRT picker fails due to an invalid window handle (common in WinUI 3).
+    /// </summary>
     private async Task<IReadOnlyList<StorageFile>?> PickMultipleFiles()
     {
         Logger.Info("PickMultipleFiles: Starting");
-
-        // Get window handle
-        Logger.Info("Getting window handle...");
         var hwnd = WindowNative.GetWindowHandle(this);
-        Logger.Info($"Window handle obtained: {hwnd}");
+        Logger.Info($"Window handle: {hwnd}");
 
-        // Try WinRT picker first
         try
         {
-            Logger.Info("Attempting WinRT FileOpenPicker...");
+            Logger.Info("Attempting WinRT FileOpenPicker…");
+            var picker = new FileOpenPicker
+            {
+                ViewMode = PickerViewMode.List,
+                SuggestedStartLocation = PickerLocationId.DocumentsLibrary
+            };
+            foreach (var ext in new[] { ".pdf", ".png", ".jpg", ".jpeg", ".docx", ".csv", ".xlsx" })
+                picker.FileTypeFilter.Add(ext);
 
-            // Create and configure the picker
-            var picker = new FileOpenPicker();
-            picker.FileTypeFilter.Add(".pdf");
-            picker.FileTypeFilter.Add(".png");
-            picker.FileTypeFilter.Add(".jpg");
-            picker.FileTypeFilter.Add(".jpeg");
-            picker.FileTypeFilter.Add(".docx");
-            picker.FileTypeFilter.Add(".csv");
-            picker.FileTypeFilter.Add(".xlsx");
-            picker.ViewMode = PickerViewMode.List;
-            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
-
-            // Try to initialize with window if we have a valid handle
             if (hwnd != IntPtr.Zero)
-            {
-                Logger.Info("Initializing picker with window...");
                 InitializeWithWindow.Initialize(picker, hwnd);
-                Logger.Info("Picker initialization completed");
-            }
-            else
-            {
-                Logger.Warn("No valid window handle for picker initialization");
-            }
 
-            // Call the picker
-            Logger.Info("Calling PickMultipleFilesAsync");
             var files = await picker.PickMultipleFilesAsync();
-            Logger.Info($"✓ PickMultipleFilesAsync succeeded, returned {files?.Count ?? 0} files");
+            Logger.Info($"✓ WinRT picker returned {files?.Count ?? 0} files");
             return files;
         }
         catch (COMException comEx) when (comEx.HResult == unchecked((int)0x80070578))
         {
-            Logger.Warn($"WinRT picker failed with 0x80070578 (Invalid window handle)");
-            Logger.Info("Falling back to Win32 file dialog...");
+            Logger.Warn("WinRT picker failed (0x80070578) — falling back to Win32 dialog");
 
-            // Fallback to Win32 native dialog
-            if (hwnd != IntPtr.Zero)
+            if (hwnd == IntPtr.Zero)
             {
-                try
-                {
-                    var filter = "PDF Files|*.pdf|Image Files|*.png;*.jpg;*.jpeg|Document Files|*.docx;*.csv;*.xlsx|All Files|*.*";
-                    var filePaths = Win32FileDialog.OpenFileDialog(hwnd, "Select Files to Add", filter);
-
-                    if (filePaths.Length > 0)
-                    {
-                        Logger.Info($"Win32 dialog returned {filePaths.Length} file(s)");
-                        // Convert file paths to StorageFile objects
-                        var files = new List<StorageFile>();
-                        foreach (var path in filePaths)
-                        {
-                            try
-                            {
-                                var file = await StorageFile.GetFileFromPathAsync(path);
-                                files.Add(file);
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.Warn($"Could not load file {path}: {ex.Message}");
-                            }
-                        }
-                        Logger.Info($"✓ Successfully converted {files.Count} file(s) to StorageFile");
-                        return files;
-                    }
-                    else
-                    {
-                        Logger.Info("Win32 dialog was cancelled by user");
-                        return null;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"Win32 file dialog failed: {ex.GetType().Name}: {ex.Message}");
-                    throw;
-                }
-            }
-            else
-            {
-                Logger.Error("No valid window handle for Win32 dialog fallback");
+                Logger.Error("No valid HWND for Win32 fallback");
                 throw;
             }
+
+            var filter = "PDF Files|*.pdf|Image Files|*.png;*.jpg;*.jpeg|Document Files|*.docx;*.csv;*.xlsx|All Files|*.*";
+            var filePaths = Win32FileDialog.OpenFileDialog(hwnd, "Select Files to Add", filter);
+
+            if (filePaths.Length == 0)
+            {
+                Logger.Info("Win32 dialog cancelled");
+                return null;
+            }
+
+            Logger.Info($"Win32 dialog returned {filePaths.Length} file(s)");
+            var result = new List<StorageFile>();
+            foreach (var path in filePaths)
+            {
+                try { result.Add(await StorageFile.GetFileFromPathAsync(path)); }
+                catch (Exception ex) { Logger.Warn($"Could not load {path}: {ex.Message}"); }
+            }
+            Logger.Info($"✓ Converted {result.Count} file(s) to StorageFile");
+            return result;
         }
         catch (Exception ex)
         {
@@ -279,10 +234,12 @@ public sealed partial class MainWindow : Window
 
     private async void ClearBtn_Click(object s, RoutedEventArgs e)
     {
-        var dlg = new ContentDialog {
+        var dlg = new ContentDialog
+        {
             Title = "Clear list",
             Content = "Remove all files from the list?",
-            PrimaryButtonText = "Yes", CloseButtonText = "No",
+            PrimaryButtonText = "Yes",
+            CloseButtonText = "No",
             XamlRoot = Content.XamlRoot
         };
         if (await dlg.ShowAsync() == ContentDialogResult.Primary)
@@ -309,8 +266,13 @@ public sealed partial class MainWindow : Window
 
     private void FileListView_SelectionChanged(object s, SelectionChangedEventArgs e)
     {
+        // Sync IsSelected on each FileItemViewModel with the ListView selection
+        var selected = FileListView.SelectedItems.Cast<FileItemViewModel>().ToHashSet();
+        foreach (var file in ViewModel.Files)
+            file.IsSelected = selected.Contains(file);
+
         RefreshButtonStates();
-        var sel = FileListView.SelectedItems.Cast<FileItemViewModel>().ToList();
+        var sel = selected.ToList();
         if (sel.Count == 1 && IsPdf(sel[0].FilePath))
             Preview.LoadPdf(sel[0].FilePath);
         else if (sel.Count == 0)
@@ -325,7 +287,10 @@ public sealed partial class MainWindow : Window
         if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
         {
             var items = await e.DataView.GetStorageItemsAsync();
-            ViewModel.AddFiles(items.Select(i => i.Path));
+            var existing = ViewModel.Files.Select(f => f.FilePath)
+                               .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var newPaths = items.Select(i => i.Path).Where(p => !existing.Contains(p));
+            ViewModel.AddFiles(newPaths);
         }
     }
 
@@ -336,77 +301,137 @@ public sealed partial class MainWindow : Window
         var sel = ViewModel.SelectedPdfs.ToList();
         if (sel.Count < 2) { await Info("Merge PDFs", "Select at least 2 PDF files."); return; }
         var out_ = await SaveFile("merged.pdf", ".pdf"); if (out_ is null) return;
-        await Run("Merging PDFs…", async (_, _) => {
+        await Run("Merging PDFs…", (_, _) =>
+        {
             App.Services.GetRequiredService<PdfCoreService>()
                         .MergePdfs(sel.Select(f => f.FilePath), out_);
-            await Info("Merge Complete", $"✓  {sel.Count} files merged.\n\n{out_}");
+            return Task.CompletedTask;
         });
+        await Info("Merge Complete", $"✓  {sel.Count} files merged.\n{out_}");
     }
 
     private async void RemovePages_Click(object s, RoutedEventArgs e)
     {
-        var sel = ViewModel.SelectedPdfs.FirstOrDefault();
-        if (sel is null) return;
-        var spec = await Ask("Remove Pages",
-            "Enter pages to remove:\nExamples:  3   |   1,3,5   |   2-4   |   1,3-5,7"); if (spec is null) return;
+        var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
+        var spec = await Ask("Remove Pages", "Enter pages to remove:Examples:  3   |   1,3,5   |   2-4   |   1,3-5,7");
+        if (spec is null) return;
         var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_pages_removed.pdf", ".pdf");
         if (out_ is null) return;
-        await Run("Removing pages…", async (_, _) => {
-            var res = App.Services.GetRequiredService<PdfCoreService>()
+        PdfCoreService.RemoveResult? removeResult = null;
+        await Run("Removing pages…", (_, _) =>
+        {
+            removeResult = App.Services.GetRequiredService<PdfCoreService>()
                                   .RemovePages(sel.FilePath, out_, spec);
-            await Info("Done", $"✓  Removed {res.RemovedCount} page(s).\n\n{out_}");
+            return Task.CompletedTask;
         });
+        if (removeResult is not null)
+            await Info("Done", $"✓  Removed {removeResult.RemovedCount} page(s).\n{out_}");
     }
 
     private async void RotatePages_Click(object s, RoutedEventArgs e)
     {
         var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
-        var spec  = await Ask("Rotate Pages", "Pages to rotate (e.g. 1,3-5  or  all):", "all"); if (spec is null) return;
-        var angle = await AskInt("Rotation Angle", "Degrees (90 / 180 / 270):", 90); if (angle is null) return;
-        var out_  = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_rotated.pdf", ".pdf"); if (out_ is null) return;
-        await Run("Rotating pages…", async (_, _) => {
+        var spec = await Ask("Rotate Pages", "Pages to rotate (e.g. 1,3-5  or  all):", "all");
+        if (spec is null) return;
+        var angle = await AskInt("Rotation Angle", "Degrees (90 / 180 / 270):", 90);
+        if (angle is null) return;
+        if (angle.Value % 90 != 0 || angle.Value is 0 or 360)
+        {
+            await Err("Invalid Angle", "Rotation must be 90, 180, or 270 degrees.");
+            return;
+        }
+        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_rotated.pdf", ".pdf");
+        if (out_ is null) return;
+        await Run("Rotating pages…", (_, _) =>
+        {
             App.Services.GetRequiredService<PdfCoreService>()
                         .RotatePages(sel.FilePath, out_, spec, angle.Value);
-            await Info("Done", $"✓  Pages rotated {angle}°.\n\n{out_}");
+            return Task.CompletedTask;
         });
+        await Info("Done", $"✓  Pages rotated {angle}°.\n{out_}");
     }
 
     private async void InsertPages_Click(object s, RoutedEventArgs e)
     {
         if (!RequirePro("Insert Pages")) return;
         var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
-        var src   = await OpenFile(".pdf"); if (src is null) return;
-        var after = await AskInt("Insert Position", "Insert after page number (0 = beginning):", 0); if (after is null) return;
-        var out_  = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_inserted.pdf", ".pdf"); if (out_ is null) return;
-        App.Services.GetRequiredService<PdfCoreService>()
-                    .InsertPages(sel.FilePath, src, after.Value, out_);
-        await Info("Done", $"✓  Pages inserted.\n\n{out_}");
+        var src = await OpenFile(".pdf"); if (src is null) return;
+        var after = await AskInt("Insert Position", "Insert after page number (0 = beginning):", 0);
+        if (after is null) return;
+        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_inserted.pdf", ".pdf");
+        if (out_ is null) return;
+        await Run("Inserting pages…", (_, _) =>
+        {
+            App.Services.GetRequiredService<PdfCoreService>()
+                        .InsertPages(sel.FilePath, src, after.Value, out_);
+            return Task.CompletedTask;
+        });
+        await Info("Done", $"✓  Pages inserted.\n{out_}");
     }
 
+    // FIX: PasswordProtect — now fully implemented via PdfCoreService (iText7)
     private async void PasswordProtect_Click(object s, RoutedEventArgs e)
     {
         if (!RequirePro("Password Protect")) return;
-        await Info("Coming Soon", "Password protection requires iText7.\nSee roadmap Step 6.");
+        var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
+
+        var userPwd = await AskPassword("User Password",
+            "Password users need to open the document:");
+        if (userPwd is null) return;
+
+        var ownerPwd = await AskPassword("Owner Password",
+            "Owner password (controls permissions — can be the same):");
+        if (ownerPwd is null) return;
+
+        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_protected.pdf", ".pdf");
+        if (out_ is null) return;
+
+        await Run("Encrypting PDF…", (_, _) =>
+        {
+            App.Services.GetRequiredService<PdfCoreService>()
+                        .PasswordProtect(sel.FilePath, out_, userPwd, ownerPwd);
+            return Task.CompletedTask;
+        });
+        await Info("Done", $"✓  PDF is now password-protected.\n{out_}");
     }
 
+    // FIX: UnlockPdf — now fully implemented via PdfCoreService (iText7)
     private async void UnlockPdf_Click(object s, RoutedEventArgs e)
     {
         if (!RequirePro("Unlock PDF")) return;
-        await Info("Coming Soon", "PDF unlock requires iText7.\nSee roadmap Step 6.");
+        var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
+
+        var pwd = await AskPassword("PDF Password", "Enter the current password to unlock:");
+        if (pwd is null) return;
+
+        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_unlocked.pdf", ".pdf");
+        if (out_ is null) return;
+
+        await Run("Unlocking PDF…", (_, _) =>
+        {
+            App.Services.GetRequiredService<PdfCoreService>()
+                        .UnlockPdf(sel.FilePath, out_, pwd);
+            return Task.CompletedTask;
+        });
+        await Info("Done", $"✓  Password removed.\n{out_}");
     }
 
     private async void EditMetadata_Click(object s, RoutedEventArgs e)
     {
         if (!RequirePro("Edit Metadata")) return;
         var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
-        var title   = await Ask("Title",    "Document title:",   ""); if (title is null) return;
-        var author  = await Ask("Author",   "Author name:",      ""); if (author is null) return;
-        var subject = await Ask("Subject",  "Subject:",          ""); if (subject is null) return;
-        var keys    = await Ask("Keywords", "Keywords:",         ""); if (keys is null) return;
-        var out_    = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_meta.pdf", ".pdf"); if (out_ is null) return;
-        App.Services.GetRequiredService<PdfCoreService>()
-                    .EditMetadata(sel.FilePath, out_, title, author, subject, keys);
-        await Info("Done", $"✓  Metadata updated.\n\n{out_}");
+        var title = await Ask("Title", "Document title:", ""); if (title is null) return;
+        var author = await Ask("Author", "Author name:", ""); if (author is null) return;
+        var subject = await Ask("Subject", "Subject:", ""); if (subject is null) return;
+        var keys = await Ask("Keywords", "Keywords:", ""); if (keys is null) return;
+        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_meta.pdf", ".pdf");
+        if (out_ is null) return;
+        await Run("Updating metadata…", (_, _) =>
+        {
+            App.Services.GetRequiredService<PdfCoreService>().EditMetadata(sel.FilePath, out_, title, author, subject, keys);
+            return Task.CompletedTask;
+        });
+        await Info("Done", $"✓  Metadata updated.\n{out_}");
     }
 
     // ── Pro Actions ───────────────────────────────────────────────────────────
@@ -415,24 +440,30 @@ public sealed partial class MainWindow : Window
     {
         if (!RequirePro("OCR PDF")) return;
         var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
-        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_ocr.pdf", ".pdf"); if (out_ is null) return;
-        await Run("Running OCR…", async (prog, ct) => {
-            var res = await App.Services.GetRequiredService<PdfConvertService>()
+        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_ocr.pdf", ".pdf");
+        if (out_ is null) return;
+        OcrResult? ocrResult = null;
+        await Run("Running OCR…", async (prog, ct) =>
+        {
+            ocrResult = await App.Services.GetRequiredService<PdfConvertService>()
                                .OcrPdfAsync(sel.FilePath, out_, progress: prog, ct: ct);
-            await Info("OCR Complete", $"✓  {res.PagesProcessed} page(s) processed.\n\n{out_}");
         });
+        if (ocrResult is not null)
+            await Info("OCR Complete", $"✓  {ocrResult.PagesProcessed} page(s) processed.\n{out_}");
     }
 
     private async void PdfToDocx_Click(object s, RoutedEventArgs e)
     {
         if (!RequirePro("PDF → Word")) return;
         var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
-        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}.docx", ".docx"); if (out_ is null) return;
-        await Run("Converting to Word…", async (_, ct) => {
+        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}.docx", ".docx");
+        if (out_ is null) return;
+        await Run("Converting to Word…", async (_, ct) =>
+        {
             await App.Services.GetRequiredService<PdfConvertService>()
                                .PdfToDocxAsync(sel.FilePath, out_, ct: ct);
-            await Info("Conversion Complete", $"✓  Saved as Word document.\n\n{out_}");
         });
+        await Info("Conversion Complete", $"✓  Saved as Word document.\n{out_}");
     }
 
     private async void PdfToImages_Click(object s, RoutedEventArgs e)
@@ -440,11 +471,14 @@ public sealed partial class MainWindow : Window
         if (!RequirePro("PDF → Images")) return;
         var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
         var outDir = await PickFolder(); if (outDir is null) return;
-        await Run("Exporting pages as images…", async (prog, ct) => {
-            var imgs = await App.Services.GetRequiredService<PdfConvertService>()
+        List<string>? exportedImages = null;
+        await Run("Exporting pages as images…", async (prog, ct) =>
+        {
+            exportedImages = await App.Services.GetRequiredService<PdfConvertService>()
                                 .PdfToImagesAsync(sel.FilePath, outDir, progress: prog, ct: ct);
-            await Info("Export Complete", $"✓  {imgs.Count} image(s) saved to:\n{outDir}");
         });
+        if (exportedImages is not null)
+            await Info("Export Complete", $"✓  {exportedImages.Count} image(s) saved to:\n{outDir}");
     }
 
     private async void ImagesToPdf_Click(object s, RoutedEventArgs e)
@@ -453,11 +487,14 @@ public sealed partial class MainWindow : Window
         var images = ViewModel.SelectedImages.ToList();
         if (images.Count == 0) { await Info("Images → PDF", "Select at least one image from the list."); return; }
         var out_ = await SaveFile("images.pdf", ".pdf"); if (out_ is null) return;
-        await Run($"Creating PDF from {images.Count} image(s)…", async (prog, ct) => {
-            await App.Services.GetRequiredService<PdfConvertService>()
+        ImagesToPdfResult? imgResult = null;
+        await Run($"Creating PDF from {images.Count} image(s)…", async (prog, ct) =>
+        {
+            imgResult = await App.Services.GetRequiredService<PdfConvertService>()
                                .ImagesToPdfAsync(images.Select(f => f.FilePath), out_, progress: prog, ct: ct);
-            await Info("Done", $"✓  PDF created from {images.Count} image(s).\n\n{out_}");
         });
+        if (imgResult is not null)
+            await Info("Done", $"✓  PDF created from {imgResult.ImageCount} image(s).\n{out_}");
     }
 
     private async void CompressPdf_Click(object s, RoutedEventArgs e)
@@ -465,33 +502,92 @@ public sealed partial class MainWindow : Window
         if (!RequirePro("Compress PDF")) return;
         var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
         var quality = await AskQuality(); if (quality is null) return;
-        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_compressed.pdf", ".pdf"); if (out_ is null) return;
-        await Run("Compressing PDF…", async (_, _) => {
-            var res = App.Services.GetRequiredService<PdfCoreService>()
-                                  .CompressPdf(sel.FilePath, out_, quality);
-            var msg = res.KeptOriginal
-                ? $"File was already optimal — original quality preserved.\nSize: {FormatBytes(res.OutputSize)}"
-                : $"✓  {FormatBytes(res.OriginalSize)}  →  {FormatBytes(res.OutputSize)}  ({res.SavingsPct:F1}% smaller)";
-            await Info("Compression Complete", msg + $"\n\n{out_}");
+        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_compressed.pdf", ".pdf");
+        if (out_ is null) return;
+        PdfCoreService.CompressResult? compressResult = null;
+        await Run("Compressing PDF…", (_, _) =>
+        {
+            compressResult = App.Services.GetRequiredService<PdfCoreService>().CompressPdf(sel.FilePath, out_, quality!);
+            return Task.CompletedTask;
         });
+        if (compressResult is not null)
+        {
+            var msg = compressResult.KeptOriginal
+                ? $"File was already optimal — original quality preserved.\nSize: {FormatBytes(compressResult.OutputSize)}"
+                : $"✓  {FormatBytes(compressResult.OriginalSize)}  →  {FormatBytes(compressResult.OutputSize)}  ({compressResult.SavingsPct:F1}% smaller)";
+            await Info("Compression Complete", msg + $"\n{out_}");
+        }
     }
 
-    private async void SplitPdf_Click(object s, RoutedEventArgs e)
+    private async void SplitPdf_Click(object sender, RoutedEventArgs e)
     {
-        if (!RequirePro("Split PDF")) return;
-        var sel = ViewModel.SelectedPdfs.FirstOrDefault(); if (sel is null) return;
-        var outDir = await PickFolder(); if (outDir is null) return;
-        var byN = await YesNo("Split Method",
-            "How would you like to split this PDF?\n\nYes = every N pages\nNo = custom page ranges");
-        PdfCoreService.SplitResult res;
-        if (byN) {
-            var n = await AskInt("Pages per chunk", "Split every N pages:", 2); if (n is null) return;
-            res = App.Services.GetRequiredService<PdfCoreService>().SplitEveryN(sel.FilePath, outDir, n.Value);
-        } else {
-            var spec = await Ask("Page Ranges", "Enter ranges (e.g. 1-3, 5, 7-9):"); if (spec is null) return;
-            res = App.Services.GetRequiredService<PdfCoreService>().SplitByRanges(sel.FilePath, outDir, spec);
+        if (!RequirePro("Split PDF"))
+            return;
+
+        var selected = ViewModel.SelectedPdfs.FirstOrDefault();
+        if (selected is null)
+            return;
+
+        var outputDir = await PickFolder();
+        if (outputDir is null)
+            return;
+
+        bool splitByN = await YesNo(
+            "Split Method",
+            "How would you like to split this PDF?",
+            "Yes = every N pages",
+            "No = custom page ranges"
+        );
+
+        var pdfService = App.Services.GetRequiredService<PdfCoreService>();
+        PdfCoreService.SplitResult result;
+
+        if (splitByN)
+        {
+            var pagesPerChunk = await AskInt("Pages per chunk", "Split every N pages:", 2);
+            if (pagesPerChunk is null)
+                return;
+
+            result = pdfService.SplitEveryN(
+                selected.FilePath,
+                outputDir,
+                pagesPerChunk.Value
+            );
         }
-        await Info("Split Complete", $"✓  Created {res.OutputFiles.Count} file(s) in:\n{outDir}");
+        else
+        {
+            var rangeSpec = await Ask(
+                "Page Ranges",
+                "Enter ranges (e.g. 1-3, 5, 7-9):"
+            );
+
+            if (rangeSpec is null)
+                return;
+
+            result = pdfService.SplitByRanges(
+                selected.FilePath,
+                outputDir,
+                rangeSpec
+            );
+        }
+
+        await Info(
+            "Split Complete",
+            $"✓ Created {result.OutputFiles.Count} file(s) in: {outputDir}"
+        );
+    }
+
+    private async Task<bool> YesNo(string title, string content, string yesLabel, string noLabel)
+    {
+        var dlg = new ContentDialog
+        {
+            Title = title,
+            Content = content,
+            PrimaryButtonText = yesLabel,
+            CloseButtonText = noLabel,
+            XamlRoot = Content.XamlRoot
+        };
+        return await dlg.ShowAsync() == ContentDialogResult.Primary;
     }
 
     // ── Batch Actions ─────────────────────────────────────────────────────────
@@ -500,74 +596,99 @@ public sealed partial class MainWindow : Window
     {
         if (!RequirePro("Batch Compress")) return;
         var quality = await AskQuality(); if (quality is null) return;
-        var files   = ViewModel.AllOrSelected().Select(f => f.FilePath).ToList();
-        var outDir  = await PickFolder(); if (outDir is null) return;
-        await Run($"Compressing {files.Count} file(s)…", async (prog, ct) => {
-            var res = await App.Services.GetRequiredService<BatchService>()
+        var files = ViewModel.AllOrSelected().Select(f => f.FilePath).ToList();
+        var outDir = await PickFolder(); if (outDir is null) return;
+        BatchResult? batchResult = null;
+        await Run($"Compressing {files.Count} file(s)…", async (prog, ct) =>
+        {
+            batchResult = await App.Services.GetRequiredService<BatchService>()
                                .BatchCompressAsync(files, outDir, quality, prog, ct);
-            ViewModel.LastBatchResult = res;
-            BtnExportReport.IsEnabled = true;
-            await Info("Batch Complete", res.Summary());
         });
+        if (batchResult is not null)
+        {
+            ViewModel.LastBatchResult = batchResult;
+            RefreshButtonStates();
+            await Info("Batch Complete", batchResult.Summary());
+        }
     }
 
     private async void BatchOcr_Click(object s, RoutedEventArgs e)
     {
         if (!RequirePro("Batch OCR")) return;
-        var files  = ViewModel.AllOrSelected().Select(f => f.FilePath).ToList();
+        var files = ViewModel.AllOrSelected().Select(f => f.FilePath).ToList();
         var outDir = await PickFolder(); if (outDir is null) return;
-        await Run($"OCR processing {files.Count} file(s)…", async (prog, ct) => {
-            var res = await App.Services.GetRequiredService<BatchService>()
+        BatchResult? batchResult = null;
+        await Run($"OCR processing {files.Count} file(s)…", async (prog, ct) =>
+        {
+            batchResult = await App.Services.GetRequiredService<BatchService>()
                                .BatchOcrAsync(files, outDir, prog: prog, ct: ct);
-            ViewModel.LastBatchResult = res;
-            BtnExportReport.IsEnabled = true;
-            await Info("Batch Complete", res.Summary());
         });
+        if (batchResult is not null)
+        {
+            ViewModel.LastBatchResult = batchResult;
+            RefreshButtonStates();
+            await Info("Batch Complete", batchResult.Summary());
+        }
     }
 
     private async void BatchRemove_Click(object s, RoutedEventArgs e)
     {
         if (!RequirePro("Batch Remove Pages")) return;
-        var spec   = await Ask("Remove Pages", "Pages to remove from ALL files (e.g. 1,3-5):"); if (spec is null) return;
-        var files  = ViewModel.AllOrSelected().Select(f => f.FilePath).ToList();
+        var spec = await Ask("Remove Pages", "Pages to remove from ALL files (e.g. 1,3-5):"); if (spec is null) return;
+        var files = ViewModel.AllOrSelected().Select(f => f.FilePath).ToList();
         var outDir = await PickFolder(); if (outDir is null) return;
-        await Run($"Removing pages from {files.Count} file(s)…", async (prog, ct) => {
-            var res = await App.Services.GetRequiredService<BatchService>()
+        BatchResult? batchResult = null;
+        await Run($"Removing pages from {files.Count} file(s)…", async (prog, ct) =>
+        {
+            batchResult = await App.Services.GetRequiredService<BatchService>()
                                .BatchRemovePagesAsync(files, outDir, spec, prog, ct);
-            ViewModel.LastBatchResult = res;
-            BtnExportReport.IsEnabled = true;
-            await Info("Batch Complete", res.Summary());
         });
+        if (batchResult is not null)
+        {
+            ViewModel.LastBatchResult = batchResult;
+            RefreshButtonStates();
+            await Info("Batch Complete", batchResult.Summary());
+        }
     }
 
     private async void BatchRotate_Click(object s, RoutedEventArgs e)
     {
         if (!RequirePro("Batch Rotate")) return;
-        var spec   = await Ask("Pages", "Pages to rotate (all or e.g. 1,3-5):", "all"); if (spec is null) return;
-        var angle  = await AskInt("Angle", "Rotation angle (90/180/270):", 90); if (angle is null) return;
-        var files  = ViewModel.AllOrSelected().Select(f => f.FilePath).ToList();
+        var spec = await Ask("Pages", "Pages to rotate (all or e.g. 1,3-5):", "all"); if (spec is null) return;
+        var angle = await AskInt("Angle", "Rotation angle (90/180/270):", 90); if (angle is null) return;
+        var files = ViewModel.AllOrSelected().Select(f => f.FilePath).ToList();
         var outDir = await PickFolder(); if (outDir is null) return;
-        await Run($"Rotating {files.Count} file(s)…", async (prog, ct) => {
-            var res = await App.Services.GetRequiredService<BatchService>()
+        BatchResult? batchResult = null;
+        await Run($"Rotating {files.Count} file(s)…", async (prog, ct) =>
+        {
+            batchResult = await App.Services.GetRequiredService<BatchService>()
                                .BatchRotateAsync(files, outDir, spec, angle.Value, prog, ct);
-            ViewModel.LastBatchResult = res;
-            BtnExportReport.IsEnabled = true;
-            await Info("Batch Complete", res.Summary());
         });
+        if (batchResult is not null)
+        {
+            ViewModel.LastBatchResult = batchResult;
+            RefreshButtonStates();
+            await Info("Batch Complete", batchResult.Summary());
+        }
     }
 
     private async void BatchPdfImages_Click(object s, RoutedEventArgs e)
     {
         if (!RequirePro("Batch PDF → Images")) return;
-        var files  = ViewModel.AllOrSelected().Select(f => f.FilePath).ToList();
+        var files = ViewModel.AllOrSelected().Select(f => f.FilePath).ToList();
         var outDir = await PickFolder(); if (outDir is null) return;
-        await Run($"Exporting images from {files.Count} file(s)…", async (prog, ct) => {
-            var res = await App.Services.GetRequiredService<BatchService>()
+        BatchResult? batchResult = null;
+        await Run($"Exporting images from {files.Count} file(s)…", async (prog, ct) =>
+        {
+            batchResult = await App.Services.GetRequiredService<BatchService>()
                                .BatchPdfToImagesAsync(files, outDir, prog: prog, ct: ct);
-            ViewModel.LastBatchResult = res;
-            BtnExportReport.IsEnabled = true;
-            await Info("Batch Complete", res.Summary());
         });
+        if (batchResult is not null)
+        {
+            ViewModel.LastBatchResult = batchResult;
+            RefreshButtonStates();
+            await Info("Batch Complete", batchResult.Summary());
+        }
     }
 
     private async void ExportReport_Click(object s, RoutedEventArgs e)
@@ -575,22 +696,22 @@ public sealed partial class MainWindow : Window
         if (ViewModel.LastBatchResult is null) { await Info("No Report", "Run a batch operation first."); return; }
         var out_ = await SaveFile("batch_report.csv", ".csv"); if (out_ is null) return;
         BatchService.ExportReport(ViewModel.LastBatchResult, out_);
-        await Info("Report Saved", $"✓  CSV report saved to:\n{out_}");
+        await Info("Report Saved", $"✓  CSV report saved to:{out_}");
     }
 
     // ── Files tab ─────────────────────────────────────────────────────────────
 
     private async void ImageEditor_Click(object s, RoutedEventArgs e)
-        => await Info("Image Editor", "Image editor coming soon.\nSee roadmap Step 3.");
+        => await Info("Image Editor", "Image editor coming soon.");
 
     private async void DocxFindReplace_Click(object s, RoutedEventArgs e)
-        => await Info("Find & Replace", "DOCX find/replace coming soon.\nSee roadmap Step 4.");
+        => await Info("Find & Replace", "DOCX find/replace coming soon.");
 
     private async void DocxMerge_Click(object s, RoutedEventArgs e)
-        => await Info("Merge DOCX", "DOCX merge coming soon.\nSee roadmap Step 4.");
+        => await Info("Merge DOCX", "DOCX merge coming soon.");
 
     private async void CsvViewer_Click(object s, RoutedEventArgs e)
-        => await Info("Table Editor", "CSV/XLSX viewer coming soon.\nSee roadmap Step 5.");
+        => await Info("Table Editor", "CSV/XLSX viewer coming soon.");
 
     // ── Activate Pro ──────────────────────────────────────────────────────────
 
@@ -606,7 +727,7 @@ public sealed partial class MainWindow : Window
             }
             else
             {
-                await Err("Invalid Key", "That license key is not valid.\nPlease check the key and try again.");
+                await Err("Invalid Key", "That license key is not valid.Please check the key and try again.");
             }
         }
     }
@@ -615,10 +736,14 @@ public sealed partial class MainWindow : Window
 
     private bool RequirePro(string feature)
     {
-        if (ViewModel.License.IsPro) return true;
-        _ = Info("Pro Feature Required",
-            $"\"{feature}\" is only available in the Pro version.\n\n" +
-            "Click Activate Pro in the top bar to unlock all features.");
+        if (ViewModel.License.IsPro)
+            return true;
+
+        _ = Info(
+            "Pro Feature Required",
+            $"{feature} is only available in the Pro version. Click Activate Pro in the top bar to unlock all features."
+        );
+
         return false;
     }
 
@@ -643,30 +768,19 @@ public sealed partial class MainWindow : Window
 
     private async Task<string?> SaveFile(string suggested, string ext)
     {
-        Logger.Info($"SaveFile: Starting (suggested={suggested}, ext={ext})");
         try
         {
             var p = new FileSavePicker();
-            Logger.Info("SaveFile: Created FileSavePicker");
-
             var hwnd = WindowNative.GetWindowHandle(this);
-            Logger.Info($"SaveFile: Got window handle: {hwnd}");
-
             InitializeWithWindow.Initialize(p, hwnd);
-            Logger.Info("SaveFile: Initialized with window");
-
             p.SuggestedFileName = suggested;
             p.FileTypeChoices.Add(ext.TrimStart('.').ToUpperInvariant(), new List<string> { ext });
-
-            Logger.Info("SaveFile: Calling PickSaveFileAsync");
             var result = await p.PickSaveFileAsync();
-            var path = result?.Path;
-            Logger.Info($"SaveFile: ✓ Succeeded, returned: {path}");
-            return path;
+            return result?.Path;
         }
         catch (Exception ex)
         {
-            Logger.Error($"SaveFile: Failed with {ex.GetType().Name}: {ex.Message}");
+            Logger.Error($"SaveFile failed: {ex.Message}");
             throw;
         }
     }
@@ -689,85 +803,127 @@ public sealed partial class MainWindow : Window
 
     // ── Dialog helpers ────────────────────────────────────────────────────────
 
-    private Task Info(string title, string msg) =>
-        new ContentDialog { Title = title, Content = msg,
-            CloseButtonText = "OK", XamlRoot = Content.XamlRoot }
-        .ShowAsync().AsTask();
-
-    private Task Err(string title, string msg) =>
-        new ContentDialog { Title = title, Content = msg,
-            CloseButtonText = "OK", XamlRoot = Content.XamlRoot }
-        .ShowAsync().AsTask();
-
-    private async Task<string?> Ask(string title, string prompt, string def = "")
+    private Task Info(string title, string msg) => new ContentDialog
     {
-        var tb  = new TextBox { Text = def, PlaceholderText = prompt };
-        var dlg = new ContentDialog {
+        Title = title,
+        Content = msg,
+        CloseButtonText = "OK",
+        XamlRoot = Content.XamlRoot
+    }.ShowAsync().AsTask();
+
+    private Task Err(string title, string msg) => new ContentDialog
+    {
+        Title = title,
+        Content = msg,
+        CloseButtonText = "OK",
+        XamlRoot = Content.XamlRoot
+    }.ShowAsync().AsTask();
+
+    private async Task<string?> Ask(string title, string prompt, string defaultValue = "")
+    {
+        var box = new TextBox { Text = defaultValue, PlaceholderText = prompt };
+        var dlg = new ContentDialog
+        {
             Title = title,
-            Content = new StackPanel { Spacing = 8,
-                Children = { new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap,
-                                             Opacity = 0.8 }, tb } },
-            PrimaryButtonText = "OK", CloseButtonText = "Cancel",
+            Content = new StackPanel
+            {
+                Children = { new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap }, box }
+            },
+            PrimaryButtonText = "OK",
+            CloseButtonText = "Cancel",
             XamlRoot = Content.XamlRoot
         };
-        return await dlg.ShowAsync() == ContentDialogResult.Primary ? tb.Text.Trim() : null;
+        return await dlg.ShowAsync() == ContentDialogResult.Primary ? box.Text : null;
     }
 
-    private async Task<int?> AskInt(string title, string prompt, int def)
+    /// <summary>Ask for a password (uses a PasswordBox so input is masked).</summary>
+    private async Task<string?> AskPassword(string title, string prompt)
     {
-        var nb = new NumberBox {
-            Value = def,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-            Minimum = 0
-        };
-        var dlg = new ContentDialog {
+        var box = new PasswordBox { PlaceholderText = prompt };
+        var dlg = new ContentDialog
+        {
             Title = title,
-            Content = new StackPanel { Spacing = 8,
-                Children = { new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap,
-                                             Opacity = 0.8 }, nb } },
-            PrimaryButtonText = "OK", CloseButtonText = "Cancel",
+            Content = new StackPanel
+            {
+                Children = { new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap }, box }
+            },
+            PrimaryButtonText = "OK",
+            CloseButtonText = "Cancel",
             XamlRoot = Content.XamlRoot
         };
-        return await dlg.ShowAsync() == ContentDialogResult.Primary ? (int)nb.Value : null;
+        return await dlg.ShowAsync() == ContentDialogResult.Primary ? box.Password : null;
+    }
+
+    private async Task<int?> AskInt(string title, string prompt, int defaultValue)
+    {
+        var box = new TextBox { Text = defaultValue.ToString() };
+        var dlg = new ContentDialog
+        {
+            Title = title,
+            Content = new StackPanel
+            {
+                Children = { new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap }, box }
+            },
+            PrimaryButtonText = "OK",
+            CloseButtonText = "Cancel",
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dlg.ShowAsync() != ContentDialogResult.Primary) return null;
+        return int.TryParse(box.Text, out int v) ? v : null;
     }
 
     private async Task<string?> AskQuality()
     {
-        var cb = new ComboBox {
-            ItemsSource  = new[] { "screen", "ebook", "printer", "prepress" },
+        var combo = new ComboBox
+        {
+            ItemsSource = new[] { "screen", "ebook", "printer", "prepress" },
             SelectedItem = "ebook",
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        var info = new TextBlock {
-            Text = "screen = smallest file\nebook = balanced  (recommended)\nprinter = high quality\nprepress = professional print",
-            FontSize = 12, Opacity = 0.7, Margin = new Thickness(0, 0, 0, 8)
-        };
-        var dlg = new ContentDialog {
+        var dlg = new ContentDialog
+        {
             Title = "Compression Quality",
-            Content = new StackPanel { Spacing = 6, Children = { info, cb } },
-            PrimaryButtonText = "Compress", CloseButtonText = "Cancel",
+            Content = new StackPanel
+            {
+                Children =
+                {
+                    new TextBlock { Text = "Select quality preset:", TextWrapping = TextWrapping.Wrap },
+                    new TextBlock { Text = "screen  – smallest file (72 dpi)", FontSize = 12, Opacity = 0.7 },
+                    new TextBlock { Text = "ebook   – balanced (150 dpi)", FontSize = 12, Opacity = 0.7 },
+                    new TextBlock { Text = "printer – high quality (300 dpi)", FontSize = 12, Opacity = 0.7 },
+                    new TextBlock { Text = "prepress – maximum quality", FontSize = 12, Opacity = 0.7, Margin = new Thickness(0, 0, 0, 8) },
+                    combo
+                }
+            },
+            PrimaryButtonText = "OK",
+            CloseButtonText = "Cancel",
             XamlRoot = Content.XamlRoot
         };
-        return await dlg.ShowAsync() == ContentDialogResult.Primary ? cb.SelectedItem as string : null;
+        return await dlg.ShowAsync() == ContentDialogResult.Primary
+            ? combo.SelectedItem?.ToString()
+            : null;
     }
 
-    private async Task<bool> YesNo(string title, string prompt)
+    private async Task<bool> YesNo(string title, string msg, string v)
     {
-        var dlg = new ContentDialog {
+        var dlg = new ContentDialog
+        {
             Title = title,
-            Content = new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap },
-            PrimaryButtonText = "Yes", SecondaryButtonText = "No",
+            Content = msg,
+            PrimaryButtonText = "Yes",
+            CloseButtonText = "No",
             XamlRoot = Content.XamlRoot
         };
         return await dlg.ShowAsync() == ContentDialogResult.Primary;
     }
 
-    private static string FormatBytes(long n)
+    // ── Utilities ─────────────────────────────────────────────────────────────
+
+    private static string FormatBytes(long bytes)
     {
-        foreach (var u in new[] { "B", "KB", "MB", "GB" }) {
-            if (n < 1024) return $"{n:F1} {u}";
-            n /= 1024;
-        }
-        return $"{n:F1} TB";
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+        return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
     }
 }

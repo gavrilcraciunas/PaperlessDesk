@@ -18,6 +18,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="itext7" Version="9.6.0" />
+    <PackageReference Include="itext7.bouncy-castle-adapter" Version="9.6.0" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.6" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
     <PackageReference Include="PdfPig" Version="0.1.8" />

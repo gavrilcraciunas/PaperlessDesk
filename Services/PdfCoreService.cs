@@ -1,287 +1,364 @@
+using System.Text;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Writer;
 
-namespace PaperlessDesktop.Services;
+using iText.Kernel.Pdf;
+using iText.Kernel.Utils;
+using iText.Kernel.Pdf.Canvas;
+using iText.Layout;
+
+// ✅ ALIASES (fix ambiguity)
+using PdfPigDocument = UglyToad.PdfPig.PdfDocument;
+using iTextPdfDocument = iText.Kernel.Pdf.PdfDocument;
+using iTextReader = iText.Kernel.Pdf.PdfReader;
+using iTextWriter = iText.Kernel.Pdf.PdfWriter;
 
 public class PdfCoreService
 {
-    public record MergeResult(string OutputPath, int PageCount);
-    public record RemoveResult(string OutputPath, int RemovedCount);
-    public record RotateResult(string OutputPath);
-    public record SplitResult(List<string> OutputFiles);
-    public record CompressResult(string OutputPath, long OriginalSize, long OutputSize, bool KeptOriginal)
+    // ── Result types ─────────────────────────────────────────────────────────
+
+    public class SplitResult
     {
-        public double SavingsPct => OriginalSize > 0
-            ? (OriginalSize - OutputSize) * 100.0 / OriginalSize : 0;
+        public List<string> OutputFiles { get; set; } = new();
     }
 
-    public MergeResult MergePdfs(IEnumerable<string> inputPaths, string outputPath)
+    public class RemoveResult
     {
-        try
-        {
-            var paths = inputPaths.ToList();
-            int pageCount = 0;
-            using var builder = new PdfDocumentBuilder();
-
-            foreach (var inp in paths)
-            {
-                try
-                {
-                    using (var doc = PdfDocument.Open(inp))
-                    {
-                        foreach (var page in doc.GetPages())
-                        {
-                            builder.AddPage(doc, page.Number);
-                            pageCount++;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn($"Error merging {inp}: {ex.Message}");
-                }
-            }
-
-            File.WriteAllBytes(outputPath, builder.Build());
-            Logger.Info($"Merged {paths.Count} files into {outputPath} ({pageCount} pages)");
-            return new MergeResult(outputPath, pageCount);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"MergePdfs failed", ex);
-            throw;
-        }
+        public string OutputPath { get; set; } = "";
+        public int RemovedCount { get; set; }
     }
 
-    public RemoveResult RemovePages(string inputPath, string outputPath, string pagesSpec)
+    public class CompressResult
     {
-        try
-        {
-            var toRemove = ParsePageSpec(pagesSpec);
-            using (var src = PdfDocument.Open(inputPath))
-            {
-                using var builder = new PdfDocumentBuilder();
-                int removed = 0;
-                foreach (var page in src.GetPages())
-                {
-                    if (toRemove.Contains(page.Number))
-                        removed++;
-                    else
-                        builder.AddPage(src, page.Number);
-                }
-                File.WriteAllBytes(outputPath, builder.Build());
-                Logger.Info($"Removed {removed} pages from {inputPath}");
-                return new RemoveResult(outputPath, removed);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"RemovePages failed", ex);
-            throw;
-        }
+        public long OriginalSize { get; set; }
+        public long OutputSize { get; set; }
+        public double SavingsPct => OriginalSize > 0 ? (1.0 - (double)OutputSize / OriginalSize) * 100 : 0;
+        public bool KeptOriginal { get; set; }
     }
 
-    public RotateResult RotatePages(string inputPath, string outputPath, string pagesSpec, int angleDegrees)
+    // ── GET PAGE COUNT (static, PdfPig) ──────────────────────────────────────
+
+    public static int GetPageCount(string filePath)
     {
-        try
-        {
-            // PdfPig doesn't support rotation directly; stub for now
-            File.Copy(inputPath, outputPath, overwrite: true);
-            Logger.Info($"Rotated pages (stub) from {inputPath}");
-            return new RotateResult(outputPath);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"RotatePages failed", ex);
-            throw;
-        }
+        using var doc = PdfPigDocument.Open(filePath);
+        return doc.NumberOfPages;
     }
+
+    // ── SPLIT EVERY N (PdfPig) ───────────────────────────────────────────────
 
     public SplitResult SplitEveryN(string inputPath, string outputDir, int n)
     {
-        try
+        var result = new SplitResult();
+        Directory.CreateDirectory(outputDir);
+
+        using var doc = PdfPigDocument.Open(inputPath);
+        int totalPages = doc.NumberOfPages;
+        int fileIndex = 1;
+
+        for (int i = 1; i <= totalPages; i += n)
         {
-            Directory.CreateDirectory(outputDir);
-            using (var doc = PdfDocument.Open(inputPath))
-            {
-                var pages = doc.GetPages().ToList();
-                var stem = Path.GetFileNameWithoutExtension(inputPath);
-                var outputs = new List<string>();
-                int part = 1;
+            var builder = new PdfDocumentBuilder();
+            int end = Math.Min(i + n - 1, totalPages);
 
-                for (int i = 0; i < pages.Count; i += n)
-                {
-                    using var builder = new PdfDocumentBuilder();
-                    for (int j = i; j < Math.Min(i + n, pages.Count); j++)
-                        builder.AddPage(doc, j + 1);
-                    var outPath = Path.Combine(outputDir, $"{stem}_part{part:D3}.pdf");
-                    File.WriteAllBytes(outPath, builder.Build());
-                    outputs.Add(outPath);
-                    part++;
-                }
+            for (int p = i; p <= end; p++)
+                builder.AddPage(doc, p);
 
-                Logger.Info($"Split {inputPath} into {outputs.Count} files");
-                return new SplitResult(outputs);
-            }
+            string outPath = Path.Combine(outputDir, $"split_{fileIndex}.pdf");
+            File.WriteAllBytes(outPath, builder.Build());
+            result.OutputFiles.Add(outPath);
+            fileIndex++;
         }
-        catch (Exception ex)
-        {
-            Logger.Error($"SplitEveryN failed", ex);
-            throw;
-        }
-    }
 
-    public SplitResult SplitByRanges(string inputPath, string outputDir, string rangesSpec)
-    {
-        try
-        {
-            Directory.CreateDirectory(outputDir);
-            using (var doc = PdfDocument.Open(inputPath))
-            {
-                var stem = Path.GetFileNameWithoutExtension(inputPath);
-                var outputs = new List<string>();
-                var ranges = ParseRanges(rangesSpec);
-
-                for (int ri = 0; ri < ranges.Count; ri++)
-                {
-                    var (start, end) = ranges[ri];
-                    using var builder = new PdfDocumentBuilder();
-                    for (int p = start; p <= end; p++)
-                        builder.AddPage(doc, p);
-                    var outPath = Path.Combine(outputDir, $"{stem}_range{ri + 1:D3}.pdf");
-                    File.WriteAllBytes(outPath, builder.Build());
-                    outputs.Add(outPath);
-                }
-
-                Logger.Info($"Split {inputPath} by ranges into {outputs.Count} files");
-                return new SplitResult(outputs);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"SplitByRanges failed", ex);
-            throw;
-        }
-    }
-
-    public CompressResult CompressPdf(string inputPath, string outputPath, string quality = "ebook")
-    {
-        try
-        {
-            var originalSize = new FileInfo(inputPath).Length;
-
-            // For now, just copy (compression requires Ghostscript or external tool)
-            File.Copy(inputPath, outputPath, overwrite: true);
-            var newSize = new FileInfo(outputPath).Length;
-
-            Logger.Info($"Compressed {inputPath} (stub): {originalSize} -> {newSize} bytes");
-            return new CompressResult(outputPath, originalSize, newSize, newSize >= originalSize);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"CompressPdf failed", ex);
-            throw;
-        }
-    }
-
-    public void EditMetadata(string inputPath, string outputPath, string title, string author, string subject, string keywords)
-    {
-        try
-        {
-            using (var doc = PdfDocument.Open(inputPath))
-            {
-                using var builder = new PdfDocumentBuilder();
-                foreach (var page in doc.GetPages())
-                    builder.AddPage(doc, page.Number);
-
-                // PdfPig doesn't expose direct metadata editing; stub for now
-                File.WriteAllBytes(outputPath, builder.Build());
-                Logger.Info($"Edited metadata on {inputPath}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"EditMetadata failed", ex);
-            throw;
-        }
-    }
-
-    public void InsertPages(string basePath, string insertPath, int afterPage, string outputPath)
-    {
-        try
-        {
-            using (var baseDoc = PdfDocument.Open(basePath))
-            using (var insertDoc = PdfDocument.Open(insertPath))
-            {
-                using var builder = new PdfDocumentBuilder();
-                int pg = 0;
-                foreach (var page in baseDoc.GetPages())
-                {
-                    builder.AddPage(baseDoc, page.Number);
-                    pg++;
-                    if (pg == afterPage)
-                        foreach (var ins in insertDoc.GetPages())
-                            builder.AddPage(insertDoc, ins.Number);
-                }
-                if (afterPage == 0)
-                    foreach (var ins in insertDoc.GetPages())
-                        builder.AddPage(insertDoc, ins.Number);
-
-                File.WriteAllBytes(outputPath, builder.Build());
-                Logger.Info($"Inserted pages from {insertPath} into {basePath}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"InsertPages failed", ex);
-            throw;
-        }
-    }
-
-    public static int GetPageCount(string pdfPath)
-    {
-        try
-        {
-            using (var doc = PdfDocument.Open(pdfPath))
-                return doc.NumberOfPages;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"GetPageCount failed for {pdfPath}: {ex.Message}");
-            return 0;
-        }
-    }
-
-    private static HashSet<int> ParsePageSpec(string spec)
-    {
-        var result = new HashSet<int>();
-        foreach (var part in spec.Split(',', ';'))
-        {
-            var p = part.Trim();
-            if (p.Contains('-'))
-            {
-                var lr = p.Split('-');
-                if (int.TryParse(lr[0], out int s) && int.TryParse(lr[1], out int e))
-                    for (int i = s; i <= e; i++) result.Add(i);
-            }
-            else if (int.TryParse(p, out int n)) result.Add(n);
-        }
         return result;
     }
 
-    private static List<(int, int)> ParseRanges(string spec)
+    // ── SPLIT BY RANGES (PdfPig) ────────────────────────────────────────────
+
+    public SplitResult SplitByRanges(string inputPath, string outputDir, string ranges)
+    {
+        var result = new SplitResult();
+        Directory.CreateDirectory(outputDir);
+
+        using var doc = PdfPigDocument.Open(inputPath);
+        var parsed = ParseRanges(ranges);
+        int index = 1;
+
+        foreach (var (start, end) in parsed)
+        {
+            var builder = new PdfDocumentBuilder();
+            for (int p = start; p <= end; p++)
+                builder.AddPage(doc, p);
+
+            string outPath = Path.Combine(outputDir, $"range_{index}.pdf");
+            File.WriteAllBytes(outPath, builder.Build());
+            result.OutputFiles.Add(outPath);
+            index++;
+        }
+
+        return result;
+    }
+
+    // ── MERGE PDFs (iText) ──────────────────────────────────────────────────
+
+    public string MergePdfs(IEnumerable<string> inputFiles, string outputPath)
+    {
+        using var writer = new iTextWriter(outputPath);
+        using var pdf = new iTextPdfDocument(writer);
+        var merger = new iText.Kernel.Utils.PdfMerger(pdf);
+
+        foreach (var file in inputFiles)
+        {
+            using var reader = new iTextReader(file);
+            using var source = new iTextPdfDocument(reader);
+            merger.Merge(source, 1, source.GetNumberOfPages());
+        }
+
+        return outputPath;
+    }
+
+    // ── REMOVE PAGES (string spec overload) ─────────────────────────────────
+
+    public RemoveResult RemovePages(string inputPath, string outputPath, string pagesSpec)
+    {
+        var pagesToRemove = ParsePageSpec(inputPath, pagesSpec);
+        return RemovePages(inputPath, outputPath, pagesToRemove);
+    }
+
+    public RemoveResult RemovePages(string inputPath, string outputPath, List<int> pagesToRemove)
+    {
+        using var reader = new iTextReader(inputPath);
+        using var writer = new iTextWriter(outputPath);
+        using var pdf = new iTextPdfDocument(reader, writer);
+
+        int totalPages = pdf.GetNumberOfPages();
+        var sorted = pagesToRemove
+            .Where(p => p >= 1 && p <= totalPages)
+            .Distinct()
+            .OrderByDescending(p => p)
+            .ToList();
+
+        foreach (var p in sorted)
+            pdf.RemovePage(p);
+
+        int removed = sorted.Count;
+        pdf.Close();
+        return new RemoveResult { OutputPath = outputPath, RemovedCount = removed };
+    }
+
+    // ── ROTATE PAGES (iText) ────────────────────────────────────────────────
+
+    public string RotatePages(string inputPath, string outputPath, string pagesSpec, int angle)
+    {
+        using var reader = new iTextReader(inputPath);
+        using var writer = new iTextWriter(outputPath);
+        using var pdf = new iTextPdfDocument(reader, writer);
+
+        int totalPages = pdf.GetNumberOfPages();
+        var pages = pagesSpec.Trim().Equals("all", StringComparison.OrdinalIgnoreCase)
+            ? Enumerable.Range(1, totalPages).ToList()
+            : ParsePageSpec(inputPath, pagesSpec);
+
+        foreach (var p in pages.Where(p => p >= 1 && p <= totalPages))
+        {
+            var page = pdf.GetPage(p);
+            int current = page.GetRotation();
+            page.SetRotation((current + angle) % 360);
+        }
+
+        return outputPath;
+    }
+
+    // ── INSERT PAGES (iText) ────────────────────────────────────────────────
+
+    public string InsertPages(string inputPath, string sourcePath, int afterPage, string outputPath)
+    {
+        // Copy the input file first, then insert
+        File.Copy(inputPath, outputPath, true);
+
+        using var reader = new iTextReader(outputPath);
+        reader.SetUnethicalReading(true);
+        using var writer = new iTextWriter(outputPath + ".tmp");
+        using var pdf = new iTextPdfDocument(reader, writer);
+
+        using var sourceReader = new iTextReader(sourcePath);
+        using var sourceDoc = new iTextPdfDocument(sourceReader);
+
+        int sourcePages = sourceDoc.GetNumberOfPages();
+        int insertAt = Math.Min(afterPage, pdf.GetNumberOfPages());
+
+        for (int i = 1; i <= sourcePages; i++)
+        {
+            var page = sourceDoc.GetPage(i).CopyTo(pdf);
+            pdf.AddPage(insertAt + i, page);
+        }
+
+        pdf.Close();
+        sourceDoc.Close();
+
+        File.Delete(outputPath);
+        File.Move(outputPath + ".tmp", outputPath);
+
+        return outputPath;
+    }
+
+    // ── PASSWORD PROTECT (iText) ────────────────────────────────────────────
+
+    public string PasswordProtect(string inputPath, string outputPath, string userPwd, string ownerPwd)
+    {
+        var writerProps = new WriterProperties()
+            .SetStandardEncryption(
+                Encoding.UTF8.GetBytes(userPwd),
+                Encoding.UTF8.GetBytes(ownerPwd),
+                EncryptionConstants.ALLOW_PRINTING |
+                EncryptionConstants.ALLOW_COPY,
+                EncryptionConstants.ENCRYPTION_AES_256
+            );
+
+        using var reader = new iTextReader(inputPath);
+        using var writer = new iTextWriter(outputPath, writerProps);
+        using var pdf = new iTextPdfDocument(reader, writer);
+
+        return outputPath;
+    }
+
+    // ── UNLOCK PDF (iText) ──────────────────────────────────────────────────
+
+    public string UnlockPdf(string inputPath, string outputPath, string password)
+    {
+        var readerProps = new ReaderProperties()
+            .SetPassword(Encoding.UTF8.GetBytes(password));
+
+        using var reader = new iTextReader(inputPath, readerProps);
+        using var writer = new iTextWriter(outputPath);
+        using var pdf = new iTextPdfDocument(reader, writer);
+
+        return outputPath;
+    }
+
+    // ── EDIT METADATA (iText) ───────────────────────────────────────────────
+
+    public string EditMetadata(string inputPath, string outputPath, string title, string author, string subject, string keywords)
+    {
+        using var reader = new iTextReader(inputPath);
+        using var writer = new iTextWriter(outputPath);
+        using var pdf = new iTextPdfDocument(reader, writer);
+
+        var info = pdf.GetDocumentInfo();
+        if (!string.IsNullOrWhiteSpace(title)) info.SetTitle(title);
+        if (!string.IsNullOrWhiteSpace(author)) info.SetAuthor(author);
+        if (!string.IsNullOrWhiteSpace(subject)) info.SetSubject(subject);
+        if (!string.IsNullOrWhiteSpace(keywords)) info.SetKeywords(keywords);
+
+        return outputPath;
+    }
+
+    // ── COMPRESS PDF (iText) ────────────────────────────────────────────────
+
+    public CompressResult CompressPdf(string inputPath, string outputPath, string? quality = "ebook")
+    {
+        long originalSize = new FileInfo(inputPath).Length;
+
+        var writerProps = new WriterProperties()
+            .SetFullCompressionMode(true)
+            .SetCompressionLevel(CompressionConstants.BEST_COMPRESSION);
+
+        using (var reader = new iTextReader(inputPath))
+        using (var writer = new iTextWriter(outputPath, writerProps))
+        using (var pdf = new iTextPdfDocument(reader, writer))
+        {
+            // Walk through all pages and compress streams
+            for (int i = 1; i <= pdf.GetNumberOfPages(); i++)
+            {
+                var page = pdf.GetPage(i);
+                page.GetPdfObject().Flush(true);
+            }
+        }
+
+        long outputSize = new FileInfo(outputPath).Length;
+
+        // If compression made the file bigger, keep original
+        if (outputSize >= originalSize)
+        {
+            File.Copy(inputPath, outputPath, true);
+            return new CompressResult
+            {
+                OriginalSize = originalSize,
+                OutputSize = originalSize,
+                KeptOriginal = true
+            };
+        }
+
+        return new CompressResult
+        {
+            OriginalSize = originalSize,
+            OutputSize = outputSize,
+            KeptOriginal = false
+        };
+    }
+
+    // ── EXTRACT TEXT (PdfPig) ───────────────────────────────────────────────
+
+    public string ExtractText(string filePath)
+    {
+        using var doc = PdfPigDocument.Open(filePath);
+        var sb = new StringBuilder();
+        foreach (var page in doc.GetPages())
+            sb.AppendLine(page.Text);
+        return sb.ToString();
+    }
+
+    // ── HELPERS ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses a page specification string like "1,3-5,7" into a list of page numbers.
+    /// Also supports "all".
+    /// </summary>
+    private List<int> ParsePageSpec(string inputPath, string spec)
+    {
+        if (spec.Trim().Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            int total = GetPageCount(inputPath);
+            return Enumerable.Range(1, total).ToList();
+        }
+
+        var result = new List<int>();
+        var parts = spec.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var part in parts)
+        {
+            if (part.Contains('-'))
+            {
+                var range = part.Split('-');
+                int start = int.Parse(range[0].Trim());
+                int end = int.Parse(range[1].Trim());
+                for (int i = start; i <= end; i++)
+                    result.Add(i);
+            }
+            else
+            {
+                result.Add(int.Parse(part.Trim()));
+            }
+        }
+        return result.Distinct().ToList();
+    }
+
+    private List<(int start, int end)> ParseRanges(string input)
     {
         var result = new List<(int, int)>();
-        foreach (var part in spec.Split(',', ';'))
+        var parts = input.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var part in parts)
         {
-            var p = part.Trim();
-            if (p.Contains('-'))
+            if (part.Contains('-'))
             {
-                var lr = p.Split('-');
-                if (int.TryParse(lr[0], out int s) && int.TryParse(lr[1], out int e))
-                    result.Add((s, e));
+                var range = part.Split('-');
+                int start = int.Parse(range[0].Trim());
+                int end = int.Parse(range[1].Trim());
+                result.Add((start, end));
             }
-            else if (int.TryParse(p, out int n)) result.Add((n, n));
+            else
+            {
+                int page = int.Parse(part.Trim());
+                result.Add((page, page));
+            }
         }
         return result;
     }
