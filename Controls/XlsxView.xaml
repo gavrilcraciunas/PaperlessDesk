@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="PaperlessDesktop.Controls.XlsxView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="1"/>
+            <ColumnDefinition Width="280" MinWidth="240" MaxWidth="340"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ── LEFT: TABLE PREVIEW ───────────────────────────────────────── -->
+        <Grid Grid.Column="0" Background="{StaticResource PanelBrush}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Preview toolbar -->
+            <Grid Grid.Row="0" Padding="12,8" Background="{StaticResource SidebarBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="FileNameBlock"
+                           Grid.Column="0"
+                           FontSize="13" FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                <TextBlock x:Name="StatsBlock"
+                           Grid.Column="1"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"/>
+            </Grid>
+
+            <!-- Table text preview -->
+            <ScrollViewer Grid.Row="1"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto"
+                          Padding="12">
+                <TextBlock x:Name="TableText"
+                           FontFamily="Consolas"
+                           FontSize="12"
+                           IsTextSelectionEnabled="True"
+                           TextWrapping="NoWrap"
+                           Foreground="{StaticResource TextPrimaryBrush}"/>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Separator -->
+        <Border Grid.Column="1" Background="{StaticResource SeparatorBrush}"/>
+
+        <!-- ── RIGHT: SPREADSHEET ACTIONS ────────────────────────────────── -->
+        <Grid Grid.Column="2" Background="{StaticResource PanelBrush}">
+            <ScrollViewer Padding="10,8,10,12"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="2">
+
+                    <!-- EXPORT -->
+                    <TextBlock Text="EXPORT" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <Button x:Name="BtnExportCsv" Click="ExportCsv_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE9F9;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Export as CSV" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Save as comma-separated file" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnExportXlsx" Click="ExportXlsx_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE9D2;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Export as XLSX" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Save as Excel spreadsheet" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+    </Grid>
+</UserControl>

@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="PaperlessDesktop.Controls.DocxView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="1"/>
+            <ColumnDefinition Width="280" MinWidth="240" MaxWidth="340"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ── LEFT: DOCUMENT EDITOR ─────────────────────────────────────── -->
+        <Grid Grid.Column="0" Background="{StaticResource PanelBrush}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- File name bar -->
+            <Grid Grid.Row="0" Padding="12,8" Background="{StaticResource SidebarBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="FileNameBlock"
+                           Grid.Column="0"
+                           FontSize="13" FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                <Button Grid.Column="1" x:Name="SaveDocxBtn"
+                        Content="Save" Click="SaveDocx_Click"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Padding="14,5" CornerRadius="5"
+                        IsEnabled="False"/>
+            </Grid>
+
+            <!-- Formatting toolbar -->
+            <Grid Grid.Row="1" Padding="8,6" Background="{StaticResource SidebarBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+                    <ComboBox x:Name="FontCombo" Width="130"
+                              SelectionChanged="FontCombo_SelectionChanged"
+                              PlaceholderText="Font">
+                        <x:String>Arial</x:String>
+                        <x:String>Calibri</x:String>
+                        <x:String>Times New Roman</x:String>
+                        <x:String>Courier New</x:String>
+                        <x:String>Georgia</x:String>
+                        <x:String>Verdana</x:String>
+                    </ComboBox>
+                    <ComboBox x:Name="FontSizeCombo" Width="68"
+                              SelectionChanged="FontSizeCombo_SelectionChanged"
+                              PlaceholderText="Size">
+                        <x:String>8</x:String>
+                        <x:String>9</x:String>
+                        <x:String>10</x:String>
+                        <x:String>11</x:String>
+                        <x:String>12</x:String>
+                        <x:String>14</x:String>
+                        <x:String>16</x:String>
+                        <x:String>18</x:String>
+                        <x:String>20</x:String>
+                        <x:String>24</x:String>
+                        <x:String>28</x:String>
+                        <x:String>36</x:String>
+                    </ComboBox>
+                    <AppBarSeparator/>
+                    <ToggleButton x:Name="BoldBtn" Width="34" Height="34"
+                                  Click="BoldBtn_Click" ToolTipService.ToolTip="Bold">
+                        <FontIcon Glyph="&#xE8DD;" FontSize="14"/>
+                    </ToggleButton>
+                    <ToggleButton x:Name="ItalicBtn" Width="34" Height="34"
+                                  Click="ItalicBtn_Click" ToolTipService.ToolTip="Italic">
+                        <FontIcon Glyph="&#xE8DB;" FontSize="14"/>
+                    </ToggleButton>
+                    <ToggleButton x:Name="UnderlineBtn" Width="34" Height="34"
+                                  Click="UnderlineBtn_Click" ToolTipService.ToolTip="Underline">
+                        <FontIcon Glyph="&#xE8DC;" FontSize="14"/>
+                    </ToggleButton>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0">
+                    <AppBarSeparator/>
+                    <ToggleButton x:Name="AlignLeftBtn" Width="34" Height="34"
+                                  Click="AlignLeftBtn_Click" ToolTipService.ToolTip="Align Left">
+                        <FontIcon Glyph="&#xE8E4;" FontSize="14"/>
+                    </ToggleButton>
+                    <ToggleButton x:Name="AlignCenterBtn" Width="34" Height="34"
+                                  Click="AlignCenterBtn_Click" ToolTipService.ToolTip="Center">
+                        <FontIcon Glyph="&#xE8E3;" FontSize="14"/>
+                    </ToggleButton>
+                    <ToggleButton x:Name="AlignRightBtn" Width="34" Height="34"
+                                  Click="AlignRightBtn_Click" ToolTipService.ToolTip="Align Right">
+                        <FontIcon Glyph="&#xE8E2;" FontSize="14"/>
+                    </ToggleButton>
+                    <ToggleButton x:Name="AlignJustifyBtn" Width="34" Height="34"
+                                  Click="AlignJustifyBtn_Click" ToolTipService.ToolTip="Justify">
+                        <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                    </ToggleButton>
+                    <AppBarSeparator/>
+                    <ToggleButton x:Name="BulletsBtn" Width="34" Height="34"
+                                  Click="BulletsBtn_Click" ToolTipService.ToolTip="Bullets">
+                        <FontIcon Glyph="&#xE8FD;" FontSize="14"/>
+                    </ToggleButton>
+                    <Button x:Name="ColorBtn" Width="34" Height="34"
+                            Click="ColorBtn_Click" ToolTipService.ToolTip="Text Color">
+                        <FontIcon Glyph="&#xE790;" FontSize="14"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- Rich editor -->
+            <Border Grid.Row="2"
+                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                    BorderThickness="0,1,0,0">
+                <RichEditBox x:Name="Editor"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             SelectionChanged="Editor_SelectionChanged"
+                             PlaceholderText="Select a DOCX file to start editing…"
+                             IsReadOnly="True"
+                             Padding="12"/>
+            </Border>
+
+            <!-- Status bar -->
+            <TextBlock Grid.Row="3" x:Name="StatusText"
+                       FontSize="11" Opacity="0.6"
+                       Padding="12,4"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+        </Grid>
+
+        <!-- Separator -->
+        <Border Grid.Column="1" Background="{StaticResource SeparatorBrush}"/>
+
+        <!-- ── RIGHT: DOCX ACTIONS ────────────────────────────────────────── -->
+        <Grid Grid.Column="2" Background="{StaticResource PanelBrush}">
+            <ScrollViewer Padding="10,8,10,12"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="2">
+
+                    <!-- EDIT -->
+                    <TextBlock Text="EDIT" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <Button x:Name="BtnSave" Click="SaveDocx_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE74E;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Save Document" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Write changes back to file" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnSaveAs" Click="SaveDocxAs_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE792;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Save As…" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Save to a new file" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- TOOLS -->
+                    <TextBlock Text="TOOLS" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <Button x:Name="BtnFindReplace" Click="FindReplace_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE721;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="Find and Replace" FontSize="13" FontWeight="SemiBold"/>
+                                    <Border Background="{StaticResource ProGoldLightBrush}"
+                                            CornerRadius="4" Padding="5,1">
+                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                   Foreground="{StaticResource ProGoldBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="Search text in DOCX" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnMergeDocx" Click="MergeDocx_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE8C8;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="Merge DOCX" FontSize="13" FontWeight="SemiBold"/>
+                                    <Border Background="{StaticResource ProGoldLightBrush}"
+                                            CornerRadius="4" Padding="5,1">
+                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                   Foreground="{StaticResource ProGoldBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="Combine Word documents" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+    </Grid>
+</UserControl>
