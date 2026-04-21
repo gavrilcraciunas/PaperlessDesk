@@ -19,7 +19,7 @@ public sealed partial class PreviewPane : UserControl
             FileNameBlock.Text = Path.GetFileName(path);
             EmptyState.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
             PageImage.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
-            PreviewText.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+            TextPreviewScroll.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
             PrevPageBtn.IsEnabled = false;
             NextPageBtn.IsEnabled = _totalPages > 1;
             SearchBox.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
@@ -42,7 +42,7 @@ public sealed partial class PreviewPane : UserControl
             EmptyState.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
             PageImage.Source = bmp;
             PageImage.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
-            PreviewText.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+            TextPreviewScroll.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
             PageLabel.Text = $"{bmp.PixelWidth} × {bmp.PixelHeight}";
             PrevPageBtn.IsEnabled = false;
             NextPageBtn.IsEnabled = false;
@@ -97,8 +97,8 @@ public sealed partial class PreviewPane : UserControl
         FileNameBlock.Text = fileName;
         EmptyState.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
         PageImage.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+        TextPreviewScroll.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
         PreviewText.Text = text;
-        PreviewText.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
         PageLabel.Text = $"{text.Length} chars";
         PrevPageBtn.IsEnabled = false;
         NextPageBtn.IsEnabled = false;
@@ -217,6 +217,8 @@ public sealed partial class PreviewPane : UserControl
         _currentPage = 0;
         _totalPages = 0;
         PageImage.Source = null;
+        PageImage.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+        TextPreviewScroll.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
         FileNameBlock.Text = "";
         PageLabel.Text = "";
         EmptyState.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
