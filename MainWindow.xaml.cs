@@ -127,6 +127,15 @@ public sealed partial class MainWindow : Window
         return ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tiff" or ".webp";
     }
 
+    private static bool IsDocx(string path) =>
+        path.EndsWith(".docx", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCsvOrXlsx(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        return ext is ".csv" or ".xlsx";
+    }
+
     // ── File list events ──────────────────────────────────────────────────────
 
     private async void AddBtn_Click(object s, RoutedEventArgs e)
@@ -200,7 +209,7 @@ public sealed partial class MainWindow : Window
                 throw;
             }
 
-            var filter = "PDF Files|*.pdf|Image Files|*.png;*.jpg;*.jpeg|Document Files|*.docx;*.csv;*.xlsx|All Files|*.*";
+            var filter = "All Supported|*.pdf;*.png;*.jpg;*.jpeg;*.docx;*.csv;*.xlsx|PDF Files|*.pdf|Image Files|*.png;*.jpg;*.jpeg|Document Files|*.docx;*.csv;*.xlsx|All Files|*.*";
             var filePaths = Win32FileDialog.OpenFileDialog(hwnd, "Select Files to Add", filter);
 
             if (filePaths.Length == 0)
@@ -273,8 +282,21 @@ public sealed partial class MainWindow : Window
 
         RefreshButtonStates();
         var sel = selected.ToList();
-        if (sel.Count == 1 && IsPdf(sel[0].FilePath))
-            Preview.LoadPdf(sel[0].FilePath);
+
+        if (sel.Count == 1)
+        {
+            var path = sel[0].FilePath;
+            if (IsPdf(path))
+                Preview.LoadPdf(path);
+            else if (IsImage(path))
+                Preview.LoadImage(path);
+            else if (IsDocx(path))
+                Preview.LoadDocx(path);
+            else if (IsCsvOrXlsx(path))
+                Preview.LoadCsvXlsx(path);
+            else
+                Preview.Clear();
+        }
         else if (sel.Count == 0)
             Preview.Clear();
     }
@@ -702,16 +724,383 @@ public sealed partial class MainWindow : Window
     // ── Files tab ─────────────────────────────────────────────────────────────
 
     private async void ImageEditor_Click(object s, RoutedEventArgs e)
-        => await Info("Image Editor", "Image editor coming soon.");
+    {
+        if (!RequirePro("Image Editor")) return;
+        var sel = ViewModel.Files.Where(f => f.IsSelected && IsImage(f.FilePath)).FirstOrDefault();
+        if (sel is null) { await Info("Image Editor", "Select an image file first."); return; }
+
+        // Ask what operation
+        var combo = new ComboBox
+        {
+            ItemsSource = new[] { "Resize", "Crop", "Rotate 90° CW", "Rotate 180°", "Rotate 90° CCW", "Grayscale" },
+            SelectedIndex = 0,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        var dlg = new ContentDialog
+        {
+            Title = "Image Editor",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock { Text = $"File: {sel.FileName}", FontSize = 12, Opacity = 0.7 },
+                    new TextBlock { Text = "Select operation:" },
+                    combo
+                }
+            },
+            PrimaryButtonText = "Apply",
+            CloseButtonText = "Cancel",
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dlg.ShowAsync() != ContentDialogResult.Primary) return;
+        var op = combo.SelectedItem?.ToString() ?? "Resize";
+
+        uint? newW = null, newH = null;
+        uint cropX = 0, cropY = 0, cropW = 0, cropH = 0;
+
+        if (op == "Resize")
+        {
+            var w = await AskInt("Resize", "New width (pixels):", 800); if (w is null) return;
+            var h = await AskInt("Resize", "New height (pixels, 0 = auto aspect):", 0); if (h is null) return;
+            newW = (uint)w.Value; newH = h.Value == 0 ? null : (uint?)h.Value;
+        }
+        else if (op == "Crop")
+        {
+            var x = await AskInt("Crop", "Left offset (pixels):", 0); if (x is null) return;
+            var y = await AskInt("Crop", "Top offset (pixels):", 0); if (y is null) return;
+            var cw = await AskInt("Crop", "Crop width (pixels):", 400); if (cw is null) return;
+            var ch = await AskInt("Crop", "Crop height (pixels):", 400); if (ch is null) return;
+            cropX = (uint)x.Value; cropY = (uint)y.Value; cropW = (uint)cw.Value; cropH = (uint)ch.Value;
+        }
+
+        var ext = Path.GetExtension(sel.FilePath).ToLowerInvariant();
+        var outExt = ext is ".jpg" or ".jpeg" ? ".jpg" : ".png";
+        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_edited{outExt}", outExt);
+        if (out_ is null) return;
+
+        await Run("Processing image…", async (_, ct) =>
+        {
+            var file = await StorageFile.GetFileFromPathAsync(sel.FilePath);
+            using var inStream = await file.OpenReadAsync();
+            var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(inStream);
+
+            uint srcW = decoder.PixelWidth, srcH = decoder.PixelHeight;
+            var transform = new Windows.Graphics.Imaging.BitmapTransform();
+
+            switch (op)
+            {
+                case "Resize":
+                    transform.ScaledWidth = newW!.Value;
+                    transform.ScaledHeight = newH ?? (uint)(srcH * (double)newW!.Value / srcW);
+                    transform.InterpolationMode = Windows.Graphics.Imaging.BitmapInterpolationMode.Fant;
+                    break;
+                case "Crop":
+                    transform.Bounds = new Windows.Graphics.Imaging.BitmapBounds
+                    { X = cropX, Y = cropY, Width = cropW, Height = cropH };
+                    break;
+                case "Rotate 90° CW":
+                    transform.Rotation = Windows.Graphics.Imaging.BitmapRotation.Clockwise90Degrees;
+                    break;
+                case "Rotate 180°":
+                    transform.Rotation = Windows.Graphics.Imaging.BitmapRotation.Clockwise180Degrees;
+                    break;
+                case "Rotate 90° CCW":
+                    transform.Rotation = Windows.Graphics.Imaging.BitmapRotation.Clockwise270Degrees;
+                    break;
+                case "Grayscale":
+                    // Will handle after getting pixels
+                    break;
+            }
+
+            var pixels = await decoder.GetPixelDataAsync(
+                Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied,
+                transform,
+                Windows.Graphics.Imaging.ExifOrientationMode.RespectExifOrientation,
+                Windows.Graphics.Imaging.ColorManagementMode.DoNotColorManage);
+
+            var pixelData = pixels.DetachPixelData();
+
+            uint outW = transform.ScaledWidth > 0 ? transform.ScaledWidth : srcW;
+            uint outH = transform.ScaledHeight > 0 ? transform.ScaledHeight : srcH;
+
+            if (op == "Crop") { outW = cropW; outH = cropH; }
+            else if (op.Contains("90")) { outW = srcH; outH = srcW; }
+
+            if (op == "Grayscale")
+            {
+                outW = srcW; outH = srcH;
+                for (int i = 0; i < pixelData.Length; i += 4)
+                {
+                    byte gray = (byte)(0.299 * pixelData[i + 2] + 0.587 * pixelData[i + 1] + 0.114 * pixelData[i]);
+                    pixelData[i] = pixelData[i + 1] = pixelData[i + 2] = gray;
+                }
+            }
+
+            var outFile = await (await StorageFolder.GetFolderFromPathAsync(Path.GetDirectoryName(out_)!))
+                .CreateFileAsync(Path.GetFileName(out_), Windows.Storage.CreationCollisionOption.ReplaceExisting);
+            using var outStream = await outFile.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
+
+            var encoderId = outExt == ".jpg"
+                ? Windows.Graphics.Imaging.BitmapEncoder.JpegEncoderId
+                : Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId;
+            var encoder = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(encoderId, outStream);
+            encoder.SetPixelData(Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied,
+                outW, outH, decoder.DpiX, decoder.DpiY, pixelData);
+            await encoder.FlushAsync();
+        });
+        await Info("Image Editor", $"✓  Image saved.\n{out_}");
+    }
 
     private async void DocxFindReplace_Click(object s, RoutedEventArgs e)
-        => await Info("Find & Replace", "DOCX find/replace coming soon.");
+    {
+        if (!RequirePro("Find & Replace")) return;
+        var sel = ViewModel.Files.Where(f => f.IsSelected && IsDocx(f.FilePath)).FirstOrDefault();
+        if (sel is null) { await Info("Find & Replace", "Select a DOCX file first."); return; }
+
+        var find = await Ask("Find & Replace", "Text to find:"); if (find is null) return;
+        var replace = await Ask("Find & Replace", "Replace with:", ""); if (replace is null) return;
+
+        var out_ = await SaveFile($"{Path.GetFileNameWithoutExtension(sel.FilePath)}_replaced.docx", ".docx");
+        if (out_ is null) return;
+
+        int count = 0;
+        await Run("Find & Replace…", (_, _) =>
+        {
+            File.Copy(sel.FilePath, out_, true);
+            using var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(out_, true);
+            var body = doc.MainDocumentPart?.Document?.Body;
+            if (body is not null)
+            {
+                foreach (var text in body.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>())
+                {
+                    if (text.Text.Contains(find))
+                    {
+                        count += CountOccurrences(text.Text, find);
+                        text.Text = text.Text.Replace(find, replace);
+                    }
+                }
+            }
+            return Task.CompletedTask;
+        });
+        await Info("Find & Replace", $"✓  Replaced {count} occurrence(s).\n{out_}");
+    }
 
     private async void DocxMerge_Click(object s, RoutedEventArgs e)
-        => await Info("Merge DOCX", "DOCX merge coming soon.");
+    {
+        if (!RequirePro("Merge DOCX")) return;
+        var sel = ViewModel.Files.Where(f => f.IsSelected && IsDocx(f.FilePath)).ToList();
+        if (sel.Count < 2) { await Info("Merge DOCX", "Select at least 2 DOCX files."); return; }
+
+        var out_ = await SaveFile("merged.docx", ".docx"); if (out_ is null) return;
+
+        await Run("Merging DOCX…", (_, _) =>
+        {
+            // Start from the first document
+            File.Copy(sel[0].FilePath, out_, true);
+            using var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(out_, true);
+            var mainPart = doc.MainDocumentPart!;
+            var body = mainPart.Document!.Body!;
+
+            for (int i = 1; i < sel.Count; i++)
+            {
+                // Add page break between documents
+                body.AppendChild(new DocumentFormat.OpenXml.Wordprocessing.Paragraph(
+                    new DocumentFormat.OpenXml.Wordprocessing.Run(
+                        new DocumentFormat.OpenXml.Wordprocessing.Break
+                        { Type = DocumentFormat.OpenXml.Wordprocessing.BreakValues.Page })));
+
+                // Open the next document and copy its body content
+                using var srcDoc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(sel[i].FilePath, false);
+                var srcBody = srcDoc.MainDocumentPart?.Document?.Body;
+                if (srcBody is not null)
+                {
+                    foreach (var element in srcBody.ChildElements)
+                    {
+                        // Skip SectionProperties (formatting metadata)
+                        if (element is DocumentFormat.OpenXml.Wordprocessing.SectionProperties) continue;
+                        var clone = element.CloneNode(true);
+                        body.AppendChild(clone);
+                    }
+                }
+            }
+            return Task.CompletedTask;
+        });
+        await Info("Merge DOCX", $"✓  {sel.Count} documents merged.\n{out_}");
+    }
 
     private async void CsvViewer_Click(object s, RoutedEventArgs e)
-        => await Info("Table Editor", "CSV/XLSX viewer coming soon.");
+    {
+        if (!RequirePro("Table Editor")) return;
+        var sel = ViewModel.Files.Where(f => f.IsSelected && IsCsvOrXlsx(f.FilePath)).FirstOrDefault();
+        if (sel is null) { await Info("Table Editor", "Select a CSV or XLSX file first."); return; }
+
+        string[][] rows;
+        var ext = Path.GetExtension(sel.FilePath).ToLowerInvariant();
+
+        if (ext == ".csv")
+        {
+            var lines = await File.ReadAllLinesAsync(sel.FilePath);
+            rows = lines.Select(l => ParseCsvLine(l)).ToArray();
+        }
+        else // .xlsx
+        {
+            rows = ReadXlsx(sel.FilePath);
+        }
+
+        if (rows.Length == 0) { await Info("Table Editor", "The file appears to be empty."); return; }
+
+        // Build a simple text preview (full editor would need a separate page)
+        int maxCols = rows.Max(r => r.Length);
+        int previewRows = Math.Min(rows.Length, 50);
+        var sb = new StringBuilder();
+        for (int r = 0; r < previewRows; r++)
+        {
+            sb.AppendLine(string.Join(" │ ", rows[r].Select(c => c.Length > 30 ? c[..27] + "..." : c)));
+        }
+        if (rows.Length > 50) sb.AppendLine($"... and {rows.Length - 50} more row(s)");
+
+        // Ask if they want to export as the other format
+        var combo = new ComboBox
+        {
+            ItemsSource = new[] { "View only (close)", "Export as CSV", "Export as XLSX" },
+            SelectedIndex = 0,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        var preview = new ScrollViewer
+        {
+            MaxHeight = 350,
+            Content = new TextBlock
+            {
+                Text = sb.ToString(),
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+                FontSize = 11,
+                IsTextSelectionEnabled = true,
+                TextWrapping = TextWrapping.NoWrap
+            }
+        };
+        var dlg = new ContentDialog
+        {
+            Title = $"Table Editor — {sel.FileName} ({rows.Length} rows × {maxCols} cols)",
+            Content = new StackPanel { Spacing = 8, Children = { preview, combo } },
+            PrimaryButtonText = "OK",
+            CloseButtonText = "Cancel",
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dlg.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var action = combo.SelectedItem?.ToString() ?? "";
+        if (action == "Export as CSV")
+        {
+            var out_ = await SaveFile(Path.GetFileNameWithoutExtension(sel.FilePath) + ".csv", ".csv");
+            if (out_ is null) return;
+            var csvLines = rows.Select(r => string.Join(",", r.Select(c => c.Contains(',') || c.Contains('"') ? $"\"{c.Replace("\"", "\"\"")}\"" : c)));
+            await File.WriteAllLinesAsync(out_, csvLines);
+            await Info("Export", $"✓  CSV saved.\n{out_}");
+        }
+        else if (action == "Export as XLSX")
+        {
+            var out_ = await SaveFile(Path.GetFileNameWithoutExtension(sel.FilePath) + ".xlsx", ".xlsx");
+            if (out_ is null) return;
+            WriteXlsx(out_, rows);
+            await Info("Export", $"✓  XLSX saved.\n{out_}");
+        }
+    }
+
+    // ── Table helpers ────────────────────────────────────────────────────────
+
+    private static string[] ParseCsvLine(string line)
+    {
+        var result = new List<string>();
+        bool inQuote = false;
+        var field = new StringBuilder();
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (inQuote)
+            {
+                if (c == '"' && i + 1 < line.Length && line[i + 1] == '"') { field.Append('"'); i++; }
+                else if (c == '"') inQuote = false;
+                else field.Append(c);
+            }
+            else
+            {
+                if (c == '"') inQuote = true;
+                else if (c == ',') { result.Add(field.ToString()); field.Clear(); }
+                else field.Append(c);
+            }
+        }
+        result.Add(field.ToString());
+        return result.ToArray();
+    }
+
+    private static string[][] ReadXlsx(string path)
+    {
+        using var doc = DocumentFormat.OpenXml.Packaging.SpreadsheetDocument.Open(path, false);
+        var wbPart = doc.WorkbookPart;
+        var sheet = wbPart?.WorksheetParts?.FirstOrDefault();
+        if (sheet is null) return Array.Empty<string[]>();
+
+        var sharedStrings = wbPart!.SharedStringTablePart?.SharedStringTable
+            ?.Elements<DocumentFormat.OpenXml.Spreadsheet.SharedStringItem>()
+            ?.Select(s => s.InnerText).ToArray() ?? Array.Empty<string>();
+
+        var rows = sheet.Worksheet.Descendants<DocumentFormat.OpenXml.Spreadsheet.Row>();
+        return rows.Select(row =>
+        {
+            return row.Elements<DocumentFormat.OpenXml.Spreadsheet.Cell>().Select(cell =>
+            {
+                var val = cell.CellValue?.InnerText ?? "";
+                if (cell.DataType?.Value == DocumentFormat.OpenXml.Spreadsheet.CellValues.SharedString
+                    && int.TryParse(val, out int idx) && idx < sharedStrings.Length)
+                    return sharedStrings[idx];
+                return val;
+            }).ToArray();
+        }).ToArray();
+    }
+
+    private static void WriteXlsx(string path, string[][] rows)
+    {
+        using var doc = DocumentFormat.OpenXml.Packaging.SpreadsheetDocument.Create(path,
+            DocumentFormat.OpenXml.SpreadsheetDocumentType.Workbook);
+        var wbPart = doc.AddWorkbookPart();
+        wbPart.Workbook = new DocumentFormat.OpenXml.Spreadsheet.Workbook();
+        var wsPart = wbPart.AddNewPart<DocumentFormat.OpenXml.Packaging.WorksheetPart>();
+        var sheetData = new DocumentFormat.OpenXml.Spreadsheet.SheetData();
+        wsPart.Worksheet = new DocumentFormat.OpenXml.Spreadsheet.Worksheet(sheetData);
+
+        foreach (var rowData in rows)
+        {
+            var row = new DocumentFormat.OpenXml.Spreadsheet.Row();
+            foreach (var cellText in rowData)
+            {
+                var cell = new DocumentFormat.OpenXml.Spreadsheet.Cell
+                {
+                    DataType = DocumentFormat.OpenXml.Spreadsheet.CellValues.String,
+                    CellValue = new DocumentFormat.OpenXml.Spreadsheet.CellValue(cellText)
+                };
+                row.Append(cell);
+            }
+            sheetData.Append(row);
+        }
+
+        var sheets = wbPart.Workbook.AppendChild(new DocumentFormat.OpenXml.Spreadsheet.Sheets());
+        sheets.Append(new DocumentFormat.OpenXml.Spreadsheet.Sheet
+        {
+            Id = wbPart.GetIdOfPart(wsPart),
+            SheetId = 1,
+            Name = "Sheet1"
+        });
+    }
+
+    private static int CountOccurrences(string text, string find)
+    {
+        int count = 0, idx = 0;
+        while ((idx = text.IndexOf(find, idx, StringComparison.Ordinal)) >= 0) { count++; idx += find.Length; }
+        return count;
+    }
 
     // ── Activate Pro ──────────────────────────────────────────────────────────
 
