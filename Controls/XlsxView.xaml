@@ -11,44 +11,145 @@
             <ColumnDefinition Width="280" MinWidth="240" MaxWidth="340"/>
         </Grid.ColumnDefinitions>
 
-        <!-- ── LEFT: TABLE PREVIEW ───────────────────────────────────────── -->
-        <Grid Grid.Column="0" Background="{StaticResource PanelBrush}">
+        <!-- ── LEFT: SPREADSHEET ─────────────────────────────────────────── -->
+        <Grid Grid.Column="0">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>   <!-- toolbar -->
+                <RowDefinition Height="Auto"/>   <!-- formula bar -->
+                <RowDefinition Height="*"/>      <!-- grid -->
             </Grid.RowDefinitions>
 
-            <!-- Preview toolbar -->
-            <Grid Grid.Row="0" Padding="12,8" Background="{StaticResource SidebarBrush}">
+            <!-- Toolbar -->
+            <Grid Grid.Row="0" Padding="10,6,10,6"
+                  Background="{StaticResource SidebarBrush}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
+
                 <TextBlock x:Name="FileNameBlock"
                            Grid.Column="0"
                            FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
                            Foreground="{StaticResource TextPrimaryBrush}"/>
+
+                <ComboBox x:Name="SheetCombo"
+                          Grid.Column="1"
+                          Margin="10,0,0,0"
+                          MinWidth="110"
+                          VerticalAlignment="Center"
+                          SelectionChanged="SheetCombo_SelectionChanged"/>
+
                 <TextBlock x:Name="StatsBlock"
-                           Grid.Column="1"
+                           Grid.Column="2"
                            FontSize="12"
                            VerticalAlignment="Center"
+                           Margin="12,0,0,0"
                            Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                <ToggleButton x:Name="HeaderRowToggle"
+                              Grid.Column="3"
+                              Content="Header Row"
+                              IsChecked="True"
+                              Click="HeaderRowToggle_Click"
+                              Margin="8,0,0,0"
+                              Padding="10,4"
+                              VerticalAlignment="Center"
+                              ToolTipService.ToolTip="Treat first row as column headers"/>
             </Grid>
 
-            <!-- Table text preview -->
-            <ScrollViewer Grid.Row="1"
-                          HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Auto"
-                          Padding="12">
-                <TextBlock x:Name="TableText"
-                           FontFamily="Consolas"
-                           FontSize="12"
-                           IsTextSelectionEnabled="True"
-                           TextWrapping="NoWrap"
-                           Foreground="{StaticResource TextPrimaryBrush}"/>
-            </ScrollViewer>
+            <!-- Formula bar -->
+            <Grid Grid.Row="1"
+                  Background="{ThemeResource LayerFillColorDefaultBrush}"
+                  BorderBrush="{StaticResource SeparatorBrush}"
+                  BorderThickness="0,0,0,1"
+                  Padding="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="72"/>
+                    <ColumnDefinition Width="1"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBox x:Name="CellRefBox"
+                         Grid.Column="0"
+                         IsReadOnly="True"
+                         TextAlignment="Center"
+                         FontSize="13"
+                         FontWeight="SemiBold"
+                         Padding="4,3"
+                         Text=""
+                         PlaceholderText="—"/>
+
+                <Border Grid.Column="1"
+                        Background="{StaticResource SeparatorBrush}"/>
+
+                <TextBlock Grid.Column="2"
+                           Text="fx"
+                           FontStyle="Italic"
+                           FontSize="13"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="8,0,8,0"/>
+
+                <TextBox x:Name="FormulaBar"
+                         Grid.Column="3"
+                         BorderThickness="0"
+                         FontSize="13"
+                         Padding="4,3"
+                         KeyDown="FormulaBar_KeyDown"
+                         PlaceholderText="Select a cell to view or edit its value"/>
+            </Grid>
+
+            <!-- Spreadsheet grid: corner | col headers | row nums | cells -->
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="50"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="28"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Corner -->
+                <Border Grid.Row="0" Grid.Column="0"
+                        Background="#EFEFEF"
+                        BorderBrush="#CCCCCC"
+                        BorderThickness="0,0,1,1"/>
+
+                <!-- Column headers (horizontal scroll only, synced with DataScroll) -->
+                <ScrollViewer x:Name="ColHeaderScroll"
+                              Grid.Row="0" Grid.Column="1"
+                              HorizontalScrollBarVisibility="Hidden"
+                              VerticalScrollBarVisibility="Disabled"
+                              IsHitTestVisible="False">
+                    <Canvas x:Name="ColHeaderCanvas" Height="28"/>
+                </ScrollViewer>
+
+                <!-- Row numbers (vertical scroll only, synced with DataScroll) -->
+                <ScrollViewer x:Name="RowNumScroll"
+                              Grid.Row="1" Grid.Column="0"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Hidden"
+                              IsHitTestVisible="False">
+                    <Canvas x:Name="RowNumCanvas" Width="50"/>
+                </ScrollViewer>
+
+                <!-- Main data canvas -->
+                <ScrollViewer x:Name="DataScroll"
+                              Grid.Row="1" Grid.Column="1"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto"
+                              ViewChanged="DataScroll_ViewChanged"
+                              KeyDown="DataScroll_KeyDown">
+                    <Canvas x:Name="CellCanvas"
+                            DoubleTapped="CellCanvas_DoubleTapped"/>
+                </ScrollViewer>
+            </Grid>
         </Grid>
 
         <!-- Separator -->
@@ -60,8 +161,71 @@
                           VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="2">
 
+                    <!-- EDIT -->
+                    <TextBlock Text="EDIT" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <Button x:Name="BtnAddRow" Click="AddRow_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE710;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Add Row" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Append an empty row" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnDeleteRow" Click="DeleteRow_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE74D;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Delete Row" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Remove selected row" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnSortAsc" Click="SortAsc_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE74B;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Sort A → Z" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Sort by selected column" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnSortDesc" Click="SortDesc_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE74A;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Sort Z → A" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Sort by selected column" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
                     <!-- EXPORT -->
                     <TextBlock Text="EXPORT" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <Button x:Name="BtnSave" Click="Save_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE74E;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Save" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Overwrite original file" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
 
                     <Button x:Name="BtnExportCsv" Click="ExportCsv_Click" IsEnabled="False"
                             Style="{StaticResource ActionButtonStyle}">
