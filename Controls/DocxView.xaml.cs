@@ -807,8 +807,9 @@ public sealed partial class DocxView : UserControl
               h4   { font-size: 12pt; font-weight: bold; margin: 10px 0 4px; }
               h5   { font-size: 11pt; font-weight: bold; margin: 8px 0 4px; }
               h6   { font-size: 10pt; font-weight: bold; margin: 8px 0 4px; }
-              table { border-collapse: collapse; margin: 8px 0; max-width: 100%; }
-              td, th { border: 1px solid #ccc; padding: 4px 8px; vertical-align: top; }
+              table { border-collapse: collapse; margin: 8px 0; max-width: 100%; width: auto; }
+              td, th { border: 1px solid #999; padding: 4px 8px; vertical-align: top; min-width: 30px; }
+              tr:first-child td, tr:first-child th { background-color: #f7f7f7; }
               ul, ol { margin: 4px 0 4px 24px; padding: 0; }
               li   { margin-bottom: 2px; }
               img  { max-width: 100%; height: auto; }
@@ -1000,24 +1001,110 @@ public sealed partial class DocxView : UserControl
         Styles? styles,
         Numbering? numbering)
     {
+        // Read table-level grid widths for column sizing
+        var gridCols = tbl.Descendants<TableGrid>().FirstOrDefault()
+            ?.Elements<GridColumn>()
+            .Select(gc => gc.Width?.Value is string w && int.TryParse(w, out int tw) ? tw : 1440)
+            .ToList();
+
         sb.Append("<table>");
-        foreach (var row in tbl.Descendants<TableRow>())
+
+        // Add colgroup for column widths
+        if (gridCols is { Count: > 0 })
+        {
+            sb.Append("<colgroup>");
+            foreach (var w in gridCols)
+                sb.Append($"<col style=\"width:{w / 20}pt\">");
+            sb.Append("</colgroup>");
+        }
+
+        // Use Elements<> (direct children only) to avoid double-rendering nested tables
+        foreach (var row in tbl.Elements<TableRow>())
         {
             sb.Append("<tr>");
-            foreach (var cell in row.Descendants<TableCell>())
+            foreach (var cell in row.Elements<TableCell>())
             {
-                // Get cell shading
-                var shade = cell.TableCellProperties?.Shading?.Fill?.Value;
-                var cellStyle = string.IsNullOrEmpty(shade) || shade == "auto"
-                    ? "" : $" style=\"background:#{shade}\"";
-                sb.Append($"<td{cellStyle}>");
-                foreach (var cp in cell.ChildElements)
-                    RenderElement(cp, sb, mainPart, styles, numbering);
+                var tcPr = cell.TableCellProperties;
+
+                // Skip cells that are vertical merge continuations
+                if (tcPr?.VerticalMerge is VerticalMerge vm &&
+                    vm.Val?.Value != MergedCellValues.Restart)
+                    continue;
+
+                // Cell shading
+                var shade = tcPr?.Shading?.Fill?.Value;
+                var styleAttrs = new List<string>();
+                if (!string.IsNullOrEmpty(shade) && shade != "auto" && shade != "FFFFFF")
+                    styleAttrs.Add($"background:#{shade}");
+
+                // Cell text direction / alignment
+                var vAlign = tcPr?.TableCellVerticalAlignment?.Val?.Value;
+                if (vAlign == TableVerticalAlignmentValues.Center)
+                    styleAttrs.Add("vertical-align:middle");
+                else if (vAlign == TableVerticalAlignmentValues.Bottom)
+                    styleAttrs.Add("vertical-align:bottom");
+
+                // Build colspan/rowspan attributes
+                var spanAttrs = "";
+                if (tcPr?.GridSpan?.Val?.Value is int cs && cs > 1)
+                    spanAttrs += $" colspan=\"{cs}\"";
+                if (tcPr?.VerticalMerge?.Val?.Value == MergedCellValues.Restart)
+                {
+                    // Count how many rows this cell spans
+                    int rowspan = CountVerticalMerge(tbl, row, cell);
+                    if (rowspan > 1) spanAttrs += $" rowspan=\"{rowspan}\"";
+                }
+
+                var styleAttr = styleAttrs.Count > 0 ? $" style=\"{string.Join(";", styleAttrs)}\"" : "";
+                sb.Append($"<td{spanAttrs}{styleAttr}>");
+
+                foreach (var cp in cell.Elements<Paragraph>())
+                    RenderParagraph(cp, sb, mainPart, styles, numbering);
+
+                // Render nested tables
+                foreach (var cp in cell.Elements<DocumentFormat.OpenXml.Wordprocessing.Table>())
+                    RenderTable(cp, sb, mainPart, styles, numbering);
+
                 sb.Append("</td>");
             }
             sb.Append("</tr>");
         }
         sb.Append("</table>");
+    }
+
+    private static int CountVerticalMerge(
+        DocumentFormat.OpenXml.Wordprocessing.Table tbl,
+        TableRow startRow,
+        TableCell startCell)
+    {
+        // Find the column index of the starting cell
+        int colIdx = 0;
+        foreach (var c in startRow.Elements<TableCell>())
+        {
+            if (c == startCell) break;
+            colIdx += c.TableCellProperties?.GridSpan?.Val?.Value ?? 1;
+        }
+
+        int count = 1;
+        bool found = false;
+        foreach (var row in tbl.Elements<TableRow>())
+        {
+            if (!found) { if (row == startRow) found = true; continue; }
+            int ci = 0;
+            foreach (var cell in row.Elements<TableCell>())
+            {
+                if (ci == colIdx)
+                {
+                    if (cell.TableCellProperties?.VerticalMerge is VerticalMerge vm2 &&
+                        vm2.Val is null) // continuation (no Val or empty)
+                        count++;
+                    else return count;
+                    break;
+                }
+                ci += cell.TableCellProperties?.GridSpan?.Val?.Value ?? 1;
+            }
+        }
+        return count;
     }
 
     // ── Style helpers ─────────────────────────────────────────────────────────
