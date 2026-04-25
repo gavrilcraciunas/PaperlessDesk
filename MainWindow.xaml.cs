@@ -277,7 +277,11 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void FileListView_DoubleTapped(object s, DoubleTappedRoutedEventArgs e) { }
+    private void FileListView_DoubleTapped(object s, DoubleTappedRoutedEventArgs e)
+    {
+        if (FileListView.SelectedItem is FileItemViewModel item)
+            Process.Start(new ProcessStartInfo(item.FilePath) { UseShellExecute = true });
+    }
 
     // ── Activate Pro ──────────────────────────────────────────────────────────
 
@@ -322,30 +326,5 @@ public sealed partial class MainWindow : Window
         return ext is ".csv" or ".xlsx";
     }
 
-    // ── Stubs to satisfy old XAML event references (Pivot is Collapsed) ───────
 
-    private void MergePdfs_Click(object s, RoutedEventArgs e) { }
-    private void RemovePages_Click(object s, RoutedEventArgs e) { }
-    private void RotatePages_Click(object s, RoutedEventArgs e) { }
-    private void InsertPages_Click(object s, RoutedEventArgs e) { }
-    private void PasswordProtect_Click(object s, RoutedEventArgs e) { }
-    private void UnlockPdf_Click(object s, RoutedEventArgs e) { }
-    private void EditMetadata_Click(object s, RoutedEventArgs e) { }
-    private void OcrPdf_Click(object s, RoutedEventArgs e) { }
-    private void PdfToDocx_Click(object s, RoutedEventArgs e) { }
-    private void PdfToImages_Click(object s, RoutedEventArgs e) { }
-    private void ImagesToPdf_Click(object s, RoutedEventArgs e) { }
-    private void CompressPdf_Click(object s, RoutedEventArgs e) { }
-    private void SplitPdf_Click(object s, RoutedEventArgs e) { }
-    private void BatchCompress_Click(object s, RoutedEventArgs e) { }
-    private void BatchOcr_Click(object s, RoutedEventArgs e) { }
-    private void BatchRemove_Click(object s, RoutedEventArgs e) { }
-    private void BatchRotate_Click(object s, RoutedEventArgs e) { }
-    private void BatchPdfImages_Click(object s, RoutedEventArgs e) { }
-    private void ExportReport_Click(object s, RoutedEventArgs e) { }
-    private void ImageEditor_Click(object s, RoutedEventArgs e) { }
-    private void EditDocx_Click(object s, RoutedEventArgs e) { }
-    private void DocxFindReplace_Click(object s, RoutedEventArgs e) { }
-    private void DocxMerge_Click(object s, RoutedEventArgs e) { }
-    private void CsvViewer_Click(object s, RoutedEventArgs e) { }
 }
