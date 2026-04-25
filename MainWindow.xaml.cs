@@ -28,6 +28,10 @@ public sealed partial class MainWindow : Window
                 StatusBlock.Text = ViewModel.StatusText;
             if (e.PropertyName == nameof(ViewModel.FileCountText))
                 FileCountBlock.Text = ViewModel.FileCountText;
+            if (e.PropertyName == nameof(ViewModel.IsProcessing))
+                StatusProgress.Visibility = ViewModel.IsProcessing
+                    ? Microsoft.UI.Xaml.Visibility.Visible
+                    : Microsoft.UI.Xaml.Visibility.Collapsed;
         };
 
         ViewModel.Files.CollectionChanged += (_, _) => RefreshSidebarButtons();

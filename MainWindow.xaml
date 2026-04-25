@@ -174,6 +174,8 @@
                     <ListView x:Name="FileListView"
                               SelectionMode="Extended"
                               AllowDrop="True"
+                              CanReorderItems="True"
+                              CanDragItems="True"
                               DragOver="FileListView_DragOver"
                               Drop="FileListView_Drop"
                               SelectionChanged="FileListView_SelectionChanged"
@@ -197,18 +199,22 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
 
-                                    <!-- File type badge -->
+                                    <!-- File type badge with icon -->
                                     <Border Grid.Column="0"
-                                            Background="{StaticResource BrandBlueLightBrush}"
+                                            Background="{Binding FileTypeBadgeBrush}"
                                             CornerRadius="4"
                                             Padding="5,2"
                                             VerticalAlignment="Center"
                                             MinWidth="34">
-                                        <TextBlock Text="{Binding FileType}"
-                                                   FontSize="9"
-                                                   FontWeight="Bold"
-                                                   Foreground="{StaticResource BrandBlueBrush}"
-                                                   HorizontalAlignment="Center"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Center">
+                                            <FontIcon Glyph="{Binding FileTypeGlyph}"
+                                                      FontSize="10"
+                                                      Foreground="{Binding FileTypeIconBrush}"/>
+                                            <TextBlock Text="{Binding FileType}"
+                                                       FontSize="9"
+                                                       FontWeight="Bold"
+                                                       Foreground="{Binding FileTypeIconBrush}"/>
+                                        </StackPanel>
                                     </Border>
 
                                     <!-- File name -->
@@ -310,6 +316,10 @@
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
                             VerticalAlignment="Center">
+                    <ProgressBar x:Name="StatusProgress"
+                                 Width="120" Height="4"
+                                 IsIndeterminate="True"
+                                 Visibility="Collapsed"/>
                     <TextBlock x:Name="SelectionCountBlock"
                                Text=""
                                FontSize="11"
