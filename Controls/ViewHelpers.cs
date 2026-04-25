@@ -32,6 +32,25 @@ internal static class ViewHelpers
 
     public static async Task<string?> SaveFile(Window win, string suggested, string ext)
     {
+        // If the user configured a default output folder, skip the picker and
+        // auto-place the file there (deconflicting the name if needed).
+        var defaultDir = App.Services.GetRequiredService<AppSettings>().DefaultOutputDir;
+        if (!string.IsNullOrWhiteSpace(defaultDir) && Directory.Exists(defaultDir))
+        {
+            var candidate = Path.Combine(defaultDir, suggested);
+            if (!candidate.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                candidate = Path.ChangeExtension(candidate, ext);
+            // Deconflict
+            int n = 1;
+            var final = candidate;
+            while (File.Exists(final))
+            {
+                var stem = Path.GetFileNameWithoutExtension(candidate);
+                final = Path.Combine(defaultDir, $"{stem} ({n++}){ext}");
+            }
+            return final;
+        }
+
         var p = new FileSavePicker();
         InitializeWithWindow.Initialize(p, WindowNative.GetWindowHandle(win));
         p.SuggestedFileName = suggested;
@@ -128,10 +147,11 @@ internal static class ViewHelpers
 
     public static async Task<string?> AskQuality(XamlRoot root)
     {
+        var defaultQuality = App.Services.GetRequiredService<AppSettings>().DefaultQuality;
         var combo = new ComboBox
         {
             ItemsSource = new[] { "screen", "ebook", "printer", "prepress" },
-            SelectedItem = "ebook",
+            SelectedItem = defaultQuality,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         var dlg = new ContentDialog

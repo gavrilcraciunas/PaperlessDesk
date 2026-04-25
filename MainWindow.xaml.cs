@@ -41,9 +41,6 @@ public sealed partial class MainWindow : Window
         UpdateLicenseBadge();
         RefreshSidebarButtons();
         ShowView("empty");
-
-        // Restore dark mode preference from settings
-        ApplyTheme(ViewModel.IsDarkMode);
     }
 
     // ── License badge ─────────────────────────────────────────────────────────
@@ -70,19 +67,17 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // ── Dark mode ─────────────────────────────────────────────────────────────
+    // ── Settings ──────────────────────────────────────────────────────────────
 
-    private void DarkModeBtn_Click(object s, RoutedEventArgs e)
+    private async void SettingsBtn_Click(object s, RoutedEventArgs e)
     {
-        ViewModel.IsDarkMode = !ViewModel.IsDarkMode;
-        ApplyTheme(ViewModel.IsDarkMode);
-    }
-
-    private void ApplyTheme(bool dark)
-    {
-        if (Content is FrameworkElement root)
-            root.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light;
-        DarkModeIcon.Glyph = dark ? "\uE706" : "\uE708"; // sun : moon
+        var settings = App.Services.GetRequiredService<AppSettings>();
+        var dlg = new SettingsDialog(Content.XamlRoot, this, settings);
+        if (await dlg.ShowAsync() == ContentDialogResult.Primary)
+        {
+            dlg.ApplyTo(settings);
+            settings.Save();
+        }
     }
 
     // ── View switching ────────────────────────────────────────────────────────
