@@ -1,7 +1,6 @@
 using Microsoft.UI.Xaml.Media;
 using PaperlessDesktop.Dialogs;
 using PaperlessDesktop.Interop;
-using PaperlessDesktop.Services;
 using PaperlessDesktop.ViewModels;
 using System.Runtime.InteropServices;
 using Windows.UI;

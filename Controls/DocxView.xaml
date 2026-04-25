@@ -4,6 +4,45 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <UserControl.Resources>
+        <Style x:Key="ColorSwatchItemStyle" TargetType="GridViewItem">
+            <Setter Property="Width"  Value="20"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin"  Value="2"/>
+            <Setter Property="MinWidth"  Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridViewItem">
+                        <Border x:Name="Root"
+                                CornerRadius="3"
+                                BorderThickness="1.5"
+                                BorderBrush="Transparent"
+                                Background="{TemplateBinding Background}">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal"/>
+                                    <VisualState x:Name="PointerOver">
+                                        <VisualState.Setters>
+                                            <Setter Target="Root.BorderBrush" Value="{ThemeResource SystemAccentColor}"/>
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <VisualState.Setters>
+                                            <Setter Target="Root.BorderBrush" Value="{ThemeResource SystemAccentColorDark1}"/>
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <ContentPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
@@ -44,10 +83,11 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="3">
                     <ComboBox x:Name="FontCombo" Width="130"
                               SelectionChanged="FontCombo_SelectionChanged"
                               PlaceholderText="Font">
@@ -75,62 +115,128 @@
                         <x:String>36</x:String>
                     </ComboBox>
                     <AppBarSeparator/>
-                    <ToggleButton x:Name="BoldBtn" Width="34" Height="34"
-                                  Click="BoldBtn_Click" ToolTipService.ToolTip="Bold">
-                        <FontIcon Glyph="&#xE8DD;" FontSize="14"/>
+                    <ToggleButton x:Name="BoldBtn" Width="36" Height="36" Padding="0"
+                                  Click="BoldBtn_Click" ToolTipService.ToolTip="Bold (Ctrl+B)">
+                        <FontIcon Glyph="&#xE8DD;" FontSize="15"/>
                     </ToggleButton>
-                    <ToggleButton x:Name="ItalicBtn" Width="34" Height="34"
-                                  Click="ItalicBtn_Click" ToolTipService.ToolTip="Italic">
-                        <FontIcon Glyph="&#xE8DB;" FontSize="14"/>
+                    <ToggleButton x:Name="ItalicBtn" Width="36" Height="36" Padding="0"
+                                  Click="ItalicBtn_Click" ToolTipService.ToolTip="Italic (Ctrl+I)">
+                        <FontIcon Glyph="&#xE8DB;" FontSize="15"/>
                     </ToggleButton>
-                    <ToggleButton x:Name="UnderlineBtn" Width="34" Height="34"
-                                  Click="UnderlineBtn_Click" ToolTipService.ToolTip="Underline">
-                        <FontIcon Glyph="&#xE8DC;" FontSize="14"/>
+                    <ToggleButton x:Name="UnderlineBtn" Width="36" Height="36" Padding="0"
+                                  Click="UnderlineBtn_Click" ToolTipService.ToolTip="Underline (Ctrl+U)">
+                        <FontIcon Glyph="&#xE8DC;" FontSize="15"/>
+                    </ToggleButton>
+                    <ToggleButton x:Name="StrikeBtn" Width="36" Height="36" Padding="0"
+                                  Click="StrikeBtn_Click" ToolTipService.ToolTip="Strikethrough">
+                        <FontIcon Glyph="&#xEDE0;" FontSize="15"/>
                     </ToggleButton>
                 </StackPanel>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" Margin="6,0,0,0">
                     <AppBarSeparator/>
-                    <ToggleButton x:Name="AlignLeftBtn" Width="34" Height="34"
+                    <ToggleButton x:Name="AlignLeftBtn" Width="36" Height="36" Padding="0"
                                   Click="AlignLeftBtn_Click" ToolTipService.ToolTip="Align Left">
-                        <FontIcon Glyph="&#xE8E4;" FontSize="14"/>
+                        <FontIcon Glyph="&#xE8E4;" FontSize="15"/>
                     </ToggleButton>
-                    <ToggleButton x:Name="AlignCenterBtn" Width="34" Height="34"
+                    <ToggleButton x:Name="AlignCenterBtn" Width="36" Height="36" Padding="0"
                                   Click="AlignCenterBtn_Click" ToolTipService.ToolTip="Center">
-                        <FontIcon Glyph="&#xE8E3;" FontSize="14"/>
+                        <FontIcon Glyph="&#xE8E3;" FontSize="15"/>
                     </ToggleButton>
-                    <ToggleButton x:Name="AlignRightBtn" Width="34" Height="34"
+                    <ToggleButton x:Name="AlignRightBtn" Width="36" Height="36" Padding="0"
                                   Click="AlignRightBtn_Click" ToolTipService.ToolTip="Align Right">
-                        <FontIcon Glyph="&#xE8E2;" FontSize="14"/>
+                        <FontIcon Glyph="&#xE8E2;" FontSize="15"/>
                     </ToggleButton>
-                    <ToggleButton x:Name="AlignJustifyBtn" Width="34" Height="34"
+                    <ToggleButton x:Name="AlignJustifyBtn" Width="36" Height="36" Padding="0"
                                   Click="AlignJustifyBtn_Click" ToolTipService.ToolTip="Justify">
-                        <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                        <FontIcon Glyph="&#xE8E5;" FontSize="15"/>
                     </ToggleButton>
                     <AppBarSeparator/>
-                    <ToggleButton x:Name="BulletsBtn" Width="34" Height="34"
-                                  Click="BulletsBtn_Click" ToolTipService.ToolTip="Bullets">
-                        <FontIcon Glyph="&#xE8FD;" FontSize="14"/>
+                    <ToggleButton x:Name="BulletsBtn" Width="36" Height="36" Padding="0"
+                                  Click="BulletsBtn_Click" ToolTipService.ToolTip="Bullet List">
+                        <FontIcon Glyph="&#xE8FD;" FontSize="15"/>
                     </ToggleButton>
-                    <Button x:Name="ColorBtn" Width="34" Height="34"
-                            Click="ColorBtn_Click" ToolTipService.ToolTip="Text Color">
-                        <FontIcon Glyph="&#xE790;" FontSize="14"/>
+                    <ToggleButton x:Name="NumbersBtn" Width="36" Height="36" Padding="0"
+                                  Click="NumbersBtn_Click" ToolTipService.ToolTip="Numbered List">
+                        <FontIcon Glyph="&#xEA42;" FontSize="15"/>
+                    </ToggleButton>
+                    <AppBarSeparator/>
+                    <Button x:Name="IndentBtn" Width="36" Height="36" Padding="0"
+                            Click="IndentBtn_Click" ToolTipService.ToolTip="Increase Indent">
+                        <FontIcon Glyph="&#xE8E6;" FontSize="15"/>
+                    </Button>
+                    <Button x:Name="OutdentBtn" Width="36" Height="36" Padding="0"
+                            Click="OutdentBtn_Click" ToolTipService.ToolTip="Decrease Indent">
+                        <FontIcon Glyph="&#xE8E7;" FontSize="15"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Color group -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="3" Margin="6,0,0,0">
+                    <AppBarSeparator/>
+
+                    <!-- Text color -->
+                    <Button x:Name="TextColorBtn" Width="36" Height="36" Padding="0"
+                            ToolTipService.ToolTip="Text Color">
+                        <Button.Flyout>
+                            <Flyout Placement="Bottom" x:Name="TextColorFlyout">
+                                <StackPanel Spacing="4" Padding="4">
+                                    <TextBlock Text="Text Color" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                    <GridView x:Name="TextColorGrid" SelectionMode="None"
+                                              ItemClick="TextColorGrid_ItemClick"
+                                              IsItemClickEnabled="True"
+                                              ItemContainerStyle="{StaticResource ColorSwatchItemStyle}">
+                                        <GridView.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapGrid MaximumRowsOrColumns="10" Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </GridView.ItemsPanel>
+                                    </GridView>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                        <Grid Width="24" Height="24">
+                            <FontIcon Glyph="&#xE790;" FontSize="14" VerticalAlignment="Top" Margin="0,-2,0,0"/>
+                            <Rectangle x:Name="TextColorSwatch" Height="3"
+                                       VerticalAlignment="Bottom" Margin="2,0,2,1"
+                                       Fill="#FF000000" RadiusX="1" RadiusY="1"/>
+                        </Grid>
+                    </Button>
+
+                    <!-- Highlight color -->
+                    <Button x:Name="HighlightColorBtn" Width="36" Height="36" Padding="0"
+                            ToolTipService.ToolTip="Highlight Color">
+                        <Button.Flyout>
+                            <Flyout Placement="Bottom" x:Name="HighlightColorFlyout">
+                                <StackPanel Spacing="4" Padding="4">
+                                    <TextBlock Text="Highlight Color" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                    <Button Content="No Highlight" Click="HighlightNone_Click"
+                                            HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
+                                    <GridView x:Name="HighlightColorGrid" SelectionMode="None"
+                                              ItemClick="HighlightColorGrid_ItemClick"
+                                              IsItemClickEnabled="True"
+                                              ItemContainerStyle="{StaticResource ColorSwatchItemStyle}">
+                                        <GridView.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapGrid MaximumRowsOrColumns="10" Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </GridView.ItemsPanel>
+                                    </GridView>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                        <Grid Width="24" Height="24">
+                            <FontIcon Glyph="&#xE7A6;" FontSize="14" VerticalAlignment="Top" Margin="0,-2,0,0"/>
+                            <Rectangle x:Name="HighlightColorSwatch" Height="3"
+                                       VerticalAlignment="Bottom" Margin="2,0,2,1"
+                                       Fill="#FFFFFF00" RadiusX="1" RadiusY="1"/>
+                        </Grid>
                     </Button>
                 </StackPanel>
             </Grid>
 
-            <!-- Rich editor -->
-            <Border Grid.Row="2"
-                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                    BorderThickness="0,1,0,0">
-                <RichEditBox x:Name="Editor"
-                             AcceptsReturn="True"
-                             TextWrapping="Wrap"
-                             SelectionChanged="Editor_SelectionChanged"
-                             PlaceholderText="Select a DOCX file to start editing…"
-                             IsReadOnly="True"
-                             Padding="12"/>
-            </Border>
+            <!-- High-fidelity editable document renderer -->
+            <WebView2 Grid.Row="2" x:Name="DocWebView"/>
 
             <!-- Status bar -->
             <TextBlock Grid.Row="3" x:Name="StatusText"

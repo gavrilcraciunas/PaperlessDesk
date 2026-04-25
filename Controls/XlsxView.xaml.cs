@@ -1,19 +1,33 @@
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.UI;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml.Media;
 using PaperlessDesktop.ViewModels;
 using WinBorder = Microsoft.UI.Xaml.Controls.Border;
 using WinColor  = Windows.UI.Color;
 using WinColors = Microsoft.UI.Colors;
+using WinFontFamily = Microsoft.UI.Xaml.Media.FontFamily;
 
 namespace PaperlessDesktop.Controls;
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  CellFormat – per-cell formatting applied during canvas rendering.
+// ─────────────────────────────────────────────────────────────────────────────
+internal record CellFormat
+{
+    public bool   Bold      { get; init; }
+    public bool   Italic    { get; init; }
+    public bool   Underline { get; init; }
+    public string Align     { get; init; } = "left";   // left | center | right
+    public string FontName  { get; init; } = "";
+    public int    FontSize  { get; init; }              // 0 = default
+    public string TextColor { get; init; } = "";        // hex RRGGBB or ""
+    public string FillColor { get; init; } = "";        // hex RRGGBB or "" = no fill
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  XlsxView  –  Excel-like spreadsheet viewer/editor for CSV and XLSX files.
-//  Features: virtual canvas rendering, column resize, cell selection, in-place
-//  editing, formula bar, sheet tabs, column sort, keyboard navigation,
-//  Save / Export CSV / Export XLSX.
 // ─────────────────────────────────────────────────────────────────────────────
 public sealed partial class XlsxView : UserControl
 {
@@ -29,6 +43,9 @@ public sealed partial class XlsxView : UserControl
     private List<string>         _sheets      = new();
     private int                  _activeSheet = 0;
     private bool                 _hasHeader   = true;
+
+    // Per-cell formatting: key = (row, col)
+    private Dictionary<(int, int), CellFormat> _formats = new();
 
     // Selection
     private int _selRow = -1;
@@ -49,9 +66,50 @@ public sealed partial class XlsxView : UserControl
     private double _resizeStartX;
     private double _resizeStartW;
 
+    // Color palette (shared with DocxView style)
+    private static readonly (string Hex, string Name)[] CellColorPalette =
+    {
+        ("000000","Black"),      ("7F7F7F","Dark Gray"), ("BFBFBF","Light Gray"), ("FFFFFF","White"),
+        ("FF0000","Red"),        ("FF4500","Orange Red"),("FFA500","Orange"),      ("FFD700","Gold"),
+        ("FFFF00","Yellow"),     ("ADFF2F","Yellow Green"),
+        ("00FF00","Lime"),       ("008000","Green"),     ("006400","Dark Green"),  ("00FFFF","Cyan"),
+        ("008B8B","Dark Cyan"),  ("0000FF","Blue"),      ("00008B","Dark Blue"),   ("8B008B","Dark Magenta"),
+        ("FF00FF","Magenta"),    ("FF69B4","Hot Pink"),
+        ("C00000","Dark Red"),   ("E26B0A","Pumpkin"),   ("F4B942","Warm Yellow"),("70AD47","Soft Green"),
+        ("4BACC6","Sky Blue"),   ("4472C4","Cornflower"),("7030A0","Purple"),      ("D9D9D9","Light Grey"),
+        ("A9A9A9","Gray"),       ("595959","Charcoal"),
+        ("FFE4E1","Misty Rose"), ("FFF0D1","Peach"),     ("FFFACD","Lemon"),      ("F0FFF0","Honeydew"),
+        ("E0FFFF","Light Cyan"), ("E6E6FA","Lavender"),  ("FFE4FF","Thistle"),    ("FFF5EE","Seashell"),
+        ("F5F5DC","Beige"),      ("FAEBD7","Antique"),
+    };
+
     // ── Init ──────────────────────────────────────────────────────────────────
 
-    public XlsxView() => InitializeComponent();
+    public XlsxView()
+    {
+        InitializeComponent();
+        PopulateColorGrid(XlTextColorGrid, CellColorPalette);
+        PopulateColorGrid(XlFillColorGrid, CellColorPalette);
+    }
+
+    private static void PopulateColorGrid(GridView grid, (string Hex, string Name)[] palette)
+    {
+        foreach (var (hex, name) in palette)
+        {
+            var r = Convert.ToByte(hex[0..2], 16);
+            var g = Convert.ToByte(hex[2..4], 16);
+            var b = Convert.ToByte(hex[4..6], 16);
+            var item = new WinBorder
+            {
+                Width = 20, Height = 20,
+                CornerRadius = new CornerRadius(3),
+                Background = new SolidColorBrush(WinColor.FromArgb(255, r, g, b)),
+                Tag = hex
+            };
+            ToolTipService.SetToolTip(item, name);
+            grid.Items.Add(item);
+        }
+    }
 
     public void Initialize(MainViewModel vm, Window win)
     {
@@ -107,7 +165,7 @@ public sealed partial class XlsxView : UserControl
     {
         CommitEdit();
         _currentFilePath = null;
-        _data = new(); _sheets = new(); _colWidths = new();
+        _data = new(); _sheets = new(); _colWidths = new(); _formats = new();
         _selRow = -1; _selCol = -1;
         CellCanvas.Children.Clear();
         ColHeaderCanvas.Children.Clear();
@@ -283,11 +341,46 @@ public sealed partial class XlsxView : UserControl
                 bool isSelCol = c == _selCol;
                 string val    = c < _data[r].Count ? _data[r][c] : "";
 
-                var cellBg = isSel
-                    ? new SolidColorBrush(WinColor.FromArgb(255, 198, 224, 180))
-                    : (isSelRow || isSelCol)
-                        ? new SolidColorBrush(WinColor.FromArgb(20, 100, 160, 240))
-                        : new SolidColorBrush(WinColors.White);
+                _formats.TryGetValue((r, c), out var fmt);
+
+                // Background
+                SolidColorBrush cellBg;
+                if (isSel)
+                    cellBg = new SolidColorBrush(WinColor.FromArgb(255, 198, 224, 180));
+                else if (!string.IsNullOrEmpty(fmt?.FillColor))
+                    cellBg = HexBrush(fmt.FillColor);
+                else if (isSelRow || isSelCol)
+                    cellBg = new SolidColorBrush(WinColor.FromArgb(20, 100, 160, 240));
+                else
+                    cellBg = new SolidColorBrush(WinColors.White);
+
+                // Text alignment
+                var halign = (fmt?.Align ?? "left") switch
+                {
+                    "center" => HorizontalAlignment.Center,
+                    "right"  => HorizontalAlignment.Right,
+                    _        => HorizontalAlignment.Left
+                };
+
+                // Text formatting
+                var tb = new TextBlock
+                {
+                    Text = val, FontSize = fmt?.FontSize > 0 ? fmt.FontSize : 13,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = halign,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    FontWeight = fmt?.Bold == true ? FontWeights.Bold : FontWeights.Normal,
+                    FontStyle  = fmt?.Italic == true ? Windows.UI.Text.FontStyle.Italic
+                                                     : Windows.UI.Text.FontStyle.Normal,
+                    TextDecorations = fmt?.Underline == true
+                        ? Windows.UI.Text.TextDecorations.Underline
+                        : Windows.UI.Text.TextDecorations.None,
+                    Foreground = !string.IsNullOrEmpty(fmt?.TextColor)
+                        ? HexBrush(fmt.TextColor)
+                        : new SolidColorBrush(WinColors.Black),
+                };
+                if (!string.IsNullOrEmpty(fmt?.FontName))
+                    tb.FontFamily = new WinFontFamily(fmt.FontName);
 
                 var cell = new WinBorder
                 {
@@ -298,13 +391,8 @@ public sealed partial class XlsxView : UserControl
                         : new SolidColorBrush(WinColor.FromArgb(255, 212, 212, 212)),
                     BorderThickness = isSel ? new Thickness(2) : new Thickness(0, 0, 1, 1),
                     Padding = new Thickness(5, 0, 5, 0),
-                    Tag = (r, c)
-                };
-                cell.Child = new TextBlock
-                {
-                    Text = val, FontSize = 13,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    TextTrimming = TextTrimming.CharacterEllipsis
+                    Tag = (r, c),
+                    Child = tb
                 };
                 Canvas.SetLeft(cell, x);
                 Canvas.SetTop(cell, y);
@@ -324,7 +412,7 @@ public sealed partial class XlsxView : UserControl
         int dataStart = _hasHeader ? 1 : 0;
         if (r < dataStart || r >= _data.Count) return;
         _selRow = r; _selCol = c;
-        UpdateFormulaBar(); Render();
+        UpdateFormulaBar(); SyncFormattingToolbar(); Render();
         DataScroll.Focus(FocusState.Programmatic);
     }
 
@@ -730,6 +818,119 @@ public sealed partial class XlsxView : UserControl
             col = col * 26 + (char.ToUpperInvariant(ch) - 'A' + 1);
         }
         return Math.Max(0, col - 1);
+    }
+
+    // ── Formatting toolbar ────────────────────────────────────────────────────
+
+    private void XlBoldBtn_Click(object s, RoutedEventArgs e)
+        => ApplyFormat(f => f with { Bold = !(f.Bold) });
+
+    private void XlItalicBtn_Click(object s, RoutedEventArgs e)
+        => ApplyFormat(f => f with { Italic = !(f.Italic) });
+
+    private void XlUnderlineBtn_Click(object s, RoutedEventArgs e)
+        => ApplyFormat(f => f with { Underline = !(f.Underline) });
+
+    private void XlAlignLeftBtn_Click(object s, RoutedEventArgs e)
+        => ApplyFormat(f => f with { Align = "left" });
+
+    private void XlAlignCenterBtn_Click(object s, RoutedEventArgs e)
+        => ApplyFormat(f => f with { Align = "center" });
+
+    private void XlAlignRightBtn_Click(object s, RoutedEventArgs e)
+        => ApplyFormat(f => f with { Align = "right" });
+
+    private void XlFontCombo_SelectionChanged(object s, SelectionChangedEventArgs e)
+    {
+        if (XlFontCombo.SelectedItem is not string font) return;
+        ApplyFormat(f => f with { FontName = font });
+    }
+
+    private void XlFontSizeCombo_SelectionChanged(object s, SelectionChangedEventArgs e)
+    {
+        if (XlFontSizeCombo.SelectedItem is not string sz) return;
+        if (int.TryParse(sz, out int pt)) ApplyFormat(f => f with { FontSize = pt });
+    }
+
+    private void XlTextColorGrid_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not WinBorder b || b.Tag is not string hex) return;
+        XlTextColorFlyout.Hide();
+        XlTextColorSwatch.Fill = HexBrush(hex);
+        ApplyFormat(f => f with { TextColor = hex });
+    }
+
+    private void XlFillColorGrid_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not WinBorder b || b.Tag is not string hex) return;
+        XlFillColorFlyout.Hide();
+        XlFillColorSwatch.Fill = HexBrush(hex);
+        ApplyFormat(f => f with { FillColor = hex });
+    }
+
+    private void XlFillNone_Click(object sender, RoutedEventArgs e)
+    {
+        XlFillColorFlyout.Hide();
+        XlFillColorSwatch.Fill = new SolidColorBrush(WinColors.Transparent);
+        ApplyFormat(f => f with { FillColor = "" });
+    }
+
+    private void XlClearFormat_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selRow < 0 || _selCol < 0) return;
+        _formats.Remove((_selRow, _selCol));
+        SyncFormattingToolbar(); Render();
+    }
+
+    // Applies a format mutation to the selected cell
+    private void ApplyFormat(Func<CellFormat, CellFormat> mutate)
+    {
+        if (_selRow < 0 || _selCol < 0) return;
+        var key = (_selRow, _selCol);
+        var current = _formats.TryGetValue(key, out var f) ? f : new CellFormat();
+        _formats[key] = mutate(current);
+        SyncFormattingToolbar(); Render();
+    }
+
+    // Syncs toggle button states from the selected cell's format
+    private void SyncFormattingToolbar()
+    {
+        var fmt = (_selRow >= 0 && _selCol >= 0 && _formats.TryGetValue((_selRow, _selCol), out var f))
+            ? f : new CellFormat();
+
+        XlBoldBtn.IsChecked      = fmt.Bold;
+        XlItalicBtn.IsChecked    = fmt.Italic;
+        XlUnderlineBtn.IsChecked = fmt.Underline;
+        XlAlignLeftBtn.IsChecked   = fmt.Align == "left"   || fmt.Align == "";
+        XlAlignCenterBtn.IsChecked = fmt.Align == "center";
+        XlAlignRightBtn.IsChecked  = fmt.Align == "right";
+
+        if (!string.IsNullOrEmpty(fmt.FontName))
+            XlFontCombo.SelectedItem = fmt.FontName;
+        else
+            XlFontCombo.SelectedItem = null;
+
+        if (fmt.FontSize > 0)
+            XlFontSizeCombo.SelectedItem = fmt.FontSize.ToString();
+        else
+            XlFontSizeCombo.SelectedItem = null;
+
+        XlTextColorSwatch.Fill = !string.IsNullOrEmpty(fmt.TextColor)
+            ? HexBrush(fmt.TextColor)
+            : new SolidColorBrush(WinColors.Black);
+        XlFillColorSwatch.Fill = !string.IsNullOrEmpty(fmt.FillColor)
+            ? HexBrush(fmt.FillColor)
+            : new SolidColorBrush(WinColors.Transparent);
+    }
+
+    // ── Color helpers ─────────────────────────────────────────────────────────
+
+    private static SolidColorBrush HexBrush(string hex)
+    {
+        var r = Convert.ToByte(hex[0..2], 16);
+        var g = Convert.ToByte(hex[2..4], 16);
+        var b = Convert.ToByte(hex[4..6], 16);
+        return new SolidColorBrush(WinColor.FromArgb(255, r, g, b));
     }
 
     // ── CSV parser ────────────────────────────────────────────────────────────
