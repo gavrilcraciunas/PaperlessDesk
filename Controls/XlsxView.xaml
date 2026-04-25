@@ -232,6 +232,13 @@
                             Click="XlClearFormat_Click" ToolTipService.ToolTip="Clear Formatting">
                         <FontIcon Glyph="&#xE8BB;" FontSize="15"/>
                     </Button>
+
+                    <AppBarSeparator/>
+                    <!-- Freeze header row -->
+                    <ToggleButton x:Name="XlFreezeBtn" Width="36" Height="36" Padding="0"
+                                  Click="XlFreezeBtn_Click" ToolTipService.ToolTip="Freeze Header Row">
+                        <FontIcon Glyph="&#xE72E;" FontSize="15"/>
+                    </ToggleButton>
                 </StackPanel>
             </Grid>
 
@@ -286,6 +293,7 @@
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="28"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -304,9 +312,22 @@
                     <Canvas x:Name="ColHeaderCanvas" Height="28"/>
                 </ScrollViewer>
 
+                <!-- Frozen header row (visible only when freeze is active) -->
+                <Border Grid.Row="1" Grid.Column="0"
+                        Background="#EFEFEF" BorderBrush="#CCCCCC" BorderThickness="0,0,1,1"
+                        x:Name="FrozenCorner" Visibility="Collapsed"/>
+                <ScrollViewer x:Name="FrozenHeaderScroll"
+                              Grid.Row="1" Grid.Column="1"
+                              HorizontalScrollBarVisibility="Hidden"
+                              VerticalScrollBarVisibility="Disabled"
+                              IsHitTestVisible="False"
+                              Visibility="Collapsed">
+                    <Canvas x:Name="FrozenHeaderCanvas" Height="26"/>
+                </ScrollViewer>
+
                 <!-- Row numbers (vertical scroll only, synced with DataScroll) -->
                 <ScrollViewer x:Name="RowNumScroll"
-                              Grid.Row="1" Grid.Column="0"
+                              Grid.Row="2" Grid.Column="0"
                               HorizontalScrollBarVisibility="Disabled"
                               VerticalScrollBarVisibility="Hidden"
                               IsHitTestVisible="False">
@@ -315,7 +336,7 @@
 
                 <!-- Main data canvas -->
                 <ScrollViewer x:Name="DataScroll"
-                              Grid.Row="1" Grid.Column="1"
+                              Grid.Row="2" Grid.Column="1"
                               HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Auto"
                               ViewChanged="DataScroll_ViewChanged"
@@ -362,7 +383,43 @@
                         </StackPanel>
                     </Button>
 
-                    <Button x:Name="BtnSortAsc" Click="SortAsc_Click" IsEnabled="False"
+                    <Button x:Name="BtnInsertRow" Click="InsertRow_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE710;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Insert Row Above" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Insert row before selection" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnInsertCol" Click="InsertCol_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE710;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Insert Column Before" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Insert column before selection" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnDeleteCol" Click="DeleteCol_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE74D;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Delete Column" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Remove selected column" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnSortAsc"
                             Style="{StaticResource ActionButtonStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <FontIcon Glyph="&#xE74B;" FontSize="16" Width="20"/>
@@ -381,6 +438,18 @@
                             <StackPanel>
                                 <TextBlock Text="Sort Z → A" FontSize="13" FontWeight="SemiBold"/>
                                 <TextBlock Text="Sort by selected column" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnFindReplace" Click="FindReplace_Click" IsEnabled="False"
+                            Style="{StaticResource ActionButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE721;" FontSize="16" Width="20"/>
+                            <StackPanel>
+                                <TextBlock Text="Find &amp; Replace" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Search and replace cell values" FontSize="11"
                                            Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
                         </StackPanel>
