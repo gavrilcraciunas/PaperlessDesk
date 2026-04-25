@@ -23,6 +23,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>   <!-- App icon + name -->
                 <ColumnDefinition Width="*"/>      <!-- spacer -->
+                <ColumnDefinition Width="Auto"/>   <!-- dark mode toggle -->
                 <ColumnDefinition Width="Auto"/>   <!-- license status -->
                 <ColumnDefinition Width="Auto"/>   <!-- activate button -->
             </Grid.ColumnDefinitions>
@@ -38,8 +39,20 @@
                            Foreground="{StaticResource TextPrimaryBrush}"/>
             </StackPanel>
 
+            <!-- Dark mode toggle -->
+            <Button Grid.Column="2"
+                    x:Name="DarkModeBtn"
+                    Click="DarkModeBtn_Click"
+                    Style="{StaticResource IconButtonStyle}"
+                    Width="36" Height="36"
+                    Margin="0,0,6,0"
+                    VerticalAlignment="Center"
+                    ToolTipService.ToolTip="Toggle dark mode">
+                <FontIcon x:Name="DarkModeIcon" Glyph="&#xE708;" FontSize="15"/>
+            </Button>
+
             <!-- License badge -->
-            <Border Grid.Column="2"
+            <Border Grid.Column="3"
                     x:Name="LicenseBadge"
                     CornerRadius="12"
                     Padding="10,4"
@@ -51,7 +64,7 @@
             </Border>
 
             <!-- Activate Pro button -->
-            <Button Grid.Column="3"
+            <Button Grid.Column="4"
                     x:Name="ActivateBtn"
                     Content="Activate Pro"
                     Click="ActivateBtn_Click"
