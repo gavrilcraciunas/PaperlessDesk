@@ -9,25 +9,26 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="48"/>   <!-- TOP BAR / title bar -->
-            <RowDefinition Height="*"/>    <!-- BODY -->
-            <RowDefinition Height="28"/>   <!-- STATUS BAR -->
+            <RowDefinition Height="48"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="32"/>
         </Grid.RowDefinitions>
 
         <!-- ═══════════════════════════════════════════════════════
              TOP BAR
         ═══════════════════════════════════════════════════════ -->
         <Grid Grid.Row="0"
+              x:Name="AppTitleBar"
               Background="{StaticResource TopBarBrush}"
               Padding="12,0,12,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>   <!-- App icon + name -->
-                <ColumnDefinition Width="Auto"/>   <!-- Features menu -->
-                <ColumnDefinition Width="Auto"/>   <!-- Help menu -->
-                <ColumnDefinition Width="*"/>      <!-- spacer -->
-                <ColumnDefinition Width="Auto"/>   <!-- settings -->
-                <ColumnDefinition Width="Auto"/>   <!-- license status -->
-                <ColumnDefinition Width="Auto"/>   <!-- activate button -->
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <!-- App logo + name -->
@@ -215,9 +216,8 @@
         ═══════════════════════════════════════════════════════ -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="230" MinWidth="180" MaxWidth="320"/>
+                <ColumnDefinition Width="230" MinWidth="180" MaxWidth="300"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="0"/>
             </Grid.ColumnDefinitions>
 
             <!-- ───────────────────────────────────────────────────
@@ -291,13 +291,20 @@
                     </Button>
 
                     <!-- Filter box -->
-                    <TextBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
-                             x:Name="FilterBox"
-                             PlaceholderText="&#xE71E;  Filter files…"
-                             TextChanged="FilterBox_TextChanged"
-                             CornerRadius="6"
-                             FontSize="12"
-                             Padding="8,5"/>
+                    <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3">
+                        <TextBox x:Name="FilterBox"
+                                 PlaceholderText="Filter files…"
+                                 TextChanged="FilterBox_TextChanged"
+                                 CornerRadius="6"
+                                 FontSize="12"
+                                 Padding="32,5,8,5"/>
+                        <FontIcon Glyph="&#xE71E;" FontSize="11"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  Margin="10,0,0,0"
+                                  Foreground="{StaticResource TextSecondaryBrush}"
+                                  IsHitTestVisible="False"/>
+                    </Grid>
                 </Grid>
 
                 <!-- Section label -->
@@ -315,18 +322,28 @@
                     <StackPanel x:Name="EmptyStatePanel"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
-                                Spacing="8"
-                                Opacity="0.4">
-                        <FontIcon Glyph="&#xE8A5;"
-                                  FontSize="40"
-                                  HorizontalAlignment="Center"/>
-                        <TextBlock Text="Drop files here"
-                                   FontSize="13"
-                                   HorizontalAlignment="Center"/>
-                        <TextBlock Text="or click Add Files"
+                                Spacing="6"
+                                Margin="16">
+                        <Border Background="{StaticResource BrandBlueLightBrush}"
+                                CornerRadius="16"
+                                Width="56" Height="56"
+                                HorizontalAlignment="Center">
+                            <FontIcon Glyph="&#xE8A5;"
+                                      FontSize="26"
+                                      Foreground="{StaticResource BrandBlueBrush}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="No files yet"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="0,4,0,0"/>
+                        <TextBlock Text="Click Add Files or drag &amp; drop"
                                    FontSize="12"
                                    HorizontalAlignment="Center"
-                                   Opacity="0.7"/>
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextAlignment="Center"/>
                     </StackPanel>
 
                     <!-- List -->
@@ -423,7 +440,7 @@
             <!-- ───────────────────────────────────────────────────
                  CENTER + RIGHT — Per-file-type views
             ─────────────────────────────────────────────────── -->
-            <Grid Grid.Column="1" Grid.ColumnSpan="2">
+            <Grid Grid.Column="1">
 
                 <!-- All 5 views stacked; only one is Visible at a time -->
                 <controls:EmptyView x:Name="ViewEmpty"/>
@@ -436,12 +453,15 @@
 
         </Grid>
 
-        
+        <!-- Status bar top border -->
+        <Border Grid.Row="2" VerticalAlignment="Top" Height="1"
+                Background="{StaticResource SeparatorBrush}"/>
+
         <!-- ═══════════════════════════════════════════════════════
              STATUS BAR
         ═══════════════════════════════════════════════════════ -->
         <Border Grid.Row="2" Background="{StaticResource StatusBarBrush}">
-            <Grid Padding="12,0">
+            <Grid Padding="14,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
@@ -457,18 +477,17 @@
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"/>
 
-                <!-- Determinate progress shown inline during operations -->
                 <TextBlock Grid.Column="1"
                            x:Name="InlineStatusLabel"
                            FontSize="11"
                            Foreground="{StaticResource TextSecondaryBrush}"
                            VerticalAlignment="Center"
-                           Margin="0,0,8,0"
+                           Margin="0,0,10,0"
                            Visibility="Collapsed"/>
 
                 <ProgressBar Grid.Column="2"
                              x:Name="StatusProgress"
-                             Width="140" Height="4"
+                             Width="160" Height="5"
                              Minimum="0" Maximum="100"
                              IsIndeterminate="False"
                              VerticalAlignment="Center"
@@ -479,17 +498,13 @@
                         x:Name="InlineCancelBtn"
                         Click="StatusCancelBtn_Click"
                         Style="{StaticResource IconButtonStyle}"
-                        Width="20" Height="20"
+                        Width="22" Height="22"
                         Visibility="Collapsed"
                         ToolTipService.ToolTip="Cancel operation">
                     <FontIcon Glyph="&#xE711;" FontSize="9"/>
                 </Button>
             </Grid>
         </Border>
-
-        <!-- Status bar top border -->
-        <Border Grid.Row="2" VerticalAlignment="Top" Height="1"
-                Background="{StaticResource SeparatorBrush}"/>
 
     </Grid>
 </Window>

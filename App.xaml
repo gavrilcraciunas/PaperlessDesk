@@ -20,40 +20,52 @@
             <Color x:Key="BrandBlueLight">#EBF3FB</Color>
 
             <!-- Pro badge gold -->
-            <Color x:Key="ProGold">#C8922A</Color>
-            <Color x:Key="ProGoldLight">#FFF4CE</Color>
+            <Color x:Key="ProGold">#B07D2A</Color>
+            <Color x:Key="ProGoldLight">#FEF3DC</Color>
 
-            <!-- Surfaces -->
-            <Color x:Key="SidebarColor">#F5F5F5</Color>
+            <!-- Surfaces  (light, layered hierarchy) -->
+            <Color x:Key="TopBarColor">#E8EAED</Color>
+            <Color x:Key="SidebarColor">#ECEEF1</Color>
             <Color x:Key="PanelColor">#FAFAFA</Color>
-            <Color x:Key="TopBarColor">#FFFFFF</Color>
-            <Color x:Key="StatusBarColor">#F0F0F0</Color>
-            <Color x:Key="SeparatorColor">#E0E0E0</Color>
+            <Color x:Key="StatusBarColor">#E8EAED</Color>
+            <Color x:Key="SeparatorColor">#D8DADD</Color>
+            <Color x:Key="HoverColor">#E2E4E7</Color>
+            <Color x:Key="ActiveColor">#DDE8F5</Color>
+            <Color x:Key="CardColor">#FFFFFF</Color>
+            <Color x:Key="CardBorderColor">#E4E6E9</Color>
 
             <!-- Text -->
-            <Color x:Key="TextPrimary">#1A1A1A</Color>
-            <Color x:Key="TextSecondary">#666666</Color>
-            <Color x:Key="TextDisabled">#AAAAAA</Color>
+            <Color x:Key="TextPrimary">#1C1C1C</Color>
+            <Color x:Key="TextSecondary">#5F6368</Color>
+            <Color x:Key="TextDisabled">#BBBBBB</Color>
+            <Color x:Key="TextOnAccent">#FFFFFF</Color>
 
             <!-- Semantic -->
             <Color x:Key="SuccessColor">#107C10</Color>
             <Color x:Key="WarningColor">#CA5010</Color>
             <Color x:Key="ErrorColor">#C42B1C</Color>
 
-            <!-- Brushes -->
+            <!-- ═══════════════════════════════════════════════════
+                 BRUSHES
+            ═══════════════════════════════════════════════════ -->
             <SolidColorBrush x:Key="BrandBlueBrush"      Color="{StaticResource BrandBlue}"/>
             <SolidColorBrush x:Key="BrandBlueDarkBrush"  Color="{StaticResource BrandBlueDark}"/>
             <SolidColorBrush x:Key="BrandBlueLightBrush" Color="{StaticResource BrandBlueLight}"/>
             <SolidColorBrush x:Key="ProGoldBrush"        Color="{StaticResource ProGold}"/>
             <SolidColorBrush x:Key="ProGoldLightBrush"   Color="{StaticResource ProGoldLight}"/>
+            <SolidColorBrush x:Key="TopBarBrush"         Color="{StaticResource TopBarColor}"/>
             <SolidColorBrush x:Key="SidebarBrush"        Color="{StaticResource SidebarColor}"/>
             <SolidColorBrush x:Key="PanelBrush"          Color="{StaticResource PanelColor}"/>
-            <SolidColorBrush x:Key="TopBarBrush"         Color="{StaticResource TopBarColor}"/>
             <SolidColorBrush x:Key="StatusBarBrush"      Color="{StaticResource StatusBarColor}"/>
             <SolidColorBrush x:Key="SeparatorBrush"      Color="{StaticResource SeparatorColor}"/>
+            <SolidColorBrush x:Key="HoverBrush"          Color="{StaticResource HoverColor}"/>
+            <SolidColorBrush x:Key="ActiveBrush"         Color="{StaticResource ActiveColor}"/>
+            <SolidColorBrush x:Key="CardBrush"           Color="{StaticResource CardColor}"/>
+            <SolidColorBrush x:Key="CardBorderBrush"     Color="{StaticResource CardBorderColor}"/>
             <SolidColorBrush x:Key="TextPrimaryBrush"    Color="{StaticResource TextPrimary}"/>
             <SolidColorBrush x:Key="TextSecondaryBrush"  Color="{StaticResource TextSecondary}"/>
             <SolidColorBrush x:Key="TextDisabledBrush"   Color="{StaticResource TextDisabled}"/>
+            <SolidColorBrush x:Key="TextOnAccentBrush"   Color="{StaticResource TextOnAccent}"/>
             <SolidColorBrush x:Key="SuccessBrush"        Color="{StaticResource SuccessColor}"/>
             <SolidColorBrush x:Key="WarningBrush"        Color="{StaticResource WarningColor}"/>
             <SolidColorBrush x:Key="ErrorBrush"          Color="{StaticResource ErrorColor}"/>
@@ -63,30 +75,37 @@
             ═══════════════════════════════════════════════════ -->
 
             <Style x:Key="LabelUppercaseStyle" TargetType="TextBlock">
-                <Setter Property="FontSize"       Value="10"/>
-                <Setter Property="FontWeight"     Value="SemiBold"/>
-                <Setter Property="Foreground"     Value="{StaticResource TextSecondaryBrush}"/>
-                <Setter Property="CharacterSpacing" Value="50"/>
+                <Setter Property="FontSize"         Value="10"/>
+                <Setter Property="FontWeight"       Value="SemiBold"/>
+                <Setter Property="Foreground"       Value="{StaticResource TextSecondaryBrush}"/>
+                <Setter Property="CharacterSpacing" Value="75"/>
             </Style>
 
             <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
-                <Setter Property="FontSize"   Value="11"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                <Setter Property="Margin"     Value="0,16,0,6"/>
+                <Setter Property="FontSize"         Value="10"/>
+                <Setter Property="FontWeight"       Value="SemiBold"/>
+                <Setter Property="Foreground"       Value="{StaticResource TextSecondaryBrush}"/>
+                <Setter Property="CharacterSpacing" Value="50"/>
+                <Setter Property="Margin"           Value="4,14,0,4"/>
+            </Style>
+
+            <Style x:Key="CaptionStyle" TargetType="TextBlock">
+                <Setter Property="FontSize"     Value="11"/>
+                <Setter Property="Foreground"   Value="{StaticResource TextSecondaryBrush}"/>
             </Style>
 
             <!-- ═══════════════════════════════════════════════════
-                 PANEL TAB BUTTON  — compact top-tab strip
+                 PANEL TAB BUTTON — compact underline-style tab
             ═══════════════════════════════════════════════════ -->
             <Style x:Key="PanelTabButtonStyle" TargetType="Button">
-                <Setter Property="Padding"         Value="10,8"/>
-                <Setter Property="FontSize"        Value="12"/>
-                <Setter Property="CornerRadius"    Value="0"/>
-                <Setter Property="Background"      Value="Transparent"/>
-                <Setter Property="BorderBrush"     Value="Transparent"/>
-                <Setter Property="Foreground"      Value="{StaticResource TextSecondaryBrush}"/>
-                <Setter Property="BorderThickness" Value="0,0,0,2"/>
+                <Setter Property="MinWidth"         Value="58"/>
+                <Setter Property="Padding"          Value="10,9"/>
+                <Setter Property="FontSize"         Value="12"/>
+                <Setter Property="CornerRadius"     Value="0"/>
+                <Setter Property="Background"       Value="Transparent"/>
+                <Setter Property="BorderBrush"      Value="Transparent"/>
+                <Setter Property="Foreground"       Value="{StaticResource TextSecondaryBrush}"/>
+                <Setter Property="BorderThickness"  Value="0,0,0,2"/>
             </Style>
 
             <!-- ═══════════════════════════════════════════════════
@@ -99,32 +118,27 @@
                 <Setter Property="CornerRadius"               Value="6"/>
                 <Setter Property="FontSize"                   Value="13"/>
                 <Setter Property="Background"                 Value="{StaticResource BrandBlueBrush}"/>
-                <Setter Property="Foreground"                 Value="White"/>
+                <Setter Property="Foreground"                 Value="{StaticResource TextOnAccentBrush}"/>
             </Style>
 
             <!-- ═══════════════════════════════════════════════════
-                 ACTION BUTTON  — full-width, left-aligned icon+text
+                 ACTION BUTTON — full-width left-aligned icon+text card
             ═══════════════════════════════════════════════════ -->
             <Style x:Key="ActionButtonStyle" TargetType="Button">
                 <Setter Property="HorizontalAlignment"        Value="Stretch"/>
                 <Setter Property="HorizontalContentAlignment" Value="Left"/>
-                <Setter Property="Padding"                    Value="12,10"/>
+                <Setter Property="Padding"                    Value="10,9"/>
                 <Setter Property="CornerRadius"               Value="6"/>
                 <Setter Property="FontSize"                   Value="13"/>
                 <Setter Property="Background"                 Value="Transparent"/>
                 <Setter Property="BorderBrush"                Value="Transparent"/>
+                <Setter Property="BorderThickness"            Value="0"/>
                 <Setter Property="Foreground"                 Value="{StaticResource TextPrimaryBrush}"/>
                 <Setter Property="Margin"                     Value="0,1"/>
             </Style>
 
-            <!-- PRO action button — gold left border accent -->
-            <Style x:Key="ProActionButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
-                <Setter Property="BorderBrush"      Value="{StaticResource ProGoldBrush}"/>
-                <Setter Property="BorderThickness"  Value="0,0,0,0"/>
-            </Style>
-
             <!-- ═══════════════════════════════════════════════════
-                 ICON BUTTON  — square, no border
+                 ICON BUTTON — square ghost button
             ═══════════════════════════════════════════════════ -->
             <Style x:Key="IconButtonStyle" TargetType="Button">
                 <Setter Property="Width"           Value="32"/>

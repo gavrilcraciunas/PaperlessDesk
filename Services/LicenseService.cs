@@ -35,7 +35,7 @@ public class LicenseService
     public bool Activate(string userId, string key)
     {
         var k = key.Trim().ToUpperInvariant();
-        if (k == AppConstants.MasterKey || k == ExpectedKey(userId))
+        if (k == ExpectedKey(userId))
         {
             _state.Activated = true;
             _state.LicenseKey = k;

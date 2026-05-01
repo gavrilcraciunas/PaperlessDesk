@@ -4,13 +4,9 @@ using UglyToad.PdfPig;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
-using iText.Kernel.Pdf;
-using iText.Kernel.Pdf.Canvas;
-using iText.Kernel.Font;
-using iText.IO.Font.Constants;
-using iTextPdfDocument = iText.Kernel.Pdf.PdfDocument;
-using iTextReader = iText.Kernel.Pdf.PdfReader;
-using iTextWriter = iText.Kernel.Pdf.PdfWriter;
+using PdfSharpCore.Pdf;
+using PdfSharpCore.Pdf.IO;
+using PdfSharpCore.Drawing;
 
 namespace PaperlessDesktop.Services;
 
@@ -59,23 +55,18 @@ public class PdfConvertService
             var ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(ocrLang)
                 ?? throw new OcrException($"Could not create OCR engine for language: {ocrLang.DisplayName}");
 
-            // Render PDF pages to images, OCR each, build output PDF with text layer
             var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(inputPath);
             var pdfDoc = await Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file);
             int totalPages = (int)pdfDoc.PageCount;
 
-            using var writerStream = new FileStream(outputPath, FileMode.Create);
-            using var iWriter = new iTextWriter(writerStream);
-            using var outPdf = new iTextPdfDocument(iWriter);
-            var font = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+            using var outPdf = new PdfSharpCore.Pdf.PdfDocument();
 
             for (uint i = 0; i < pdfDoc.PageCount; i++)
             {
                 ct.ThrowIfCancellationRequested();
 
                 using var pdfPage = pdfDoc.GetPage(i);
-                // Render to bitmap
-                using var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+                using var stream  = new Windows.Storage.Streams.InMemoryRandomAccessStream();
                 await pdfPage.RenderToStreamAsync(stream).AsTask(ct);
 
                 // Decode for OCR
@@ -86,64 +77,55 @@ public class PdfConvertService
 
                 var ocrResult = await ocrEngine.RecognizeAsync(softwareBitmap);
 
-                // Get the original page dimensions (in points)
-                double pageWidthPt = pdfPage.Size.Width * 72.0 / 96.0;
+                double pageWidthPt  = pdfPage.Size.Width  * 72.0 / 96.0;
                 double pageHeightPt = pdfPage.Size.Height * 72.0 / 96.0;
+                double imgWidth     = decoder.PixelWidth;
+                double imgHeight    = decoder.PixelHeight;
 
-                // Also get rendered image pixel size for coordinate mapping
-                double imgWidth = decoder.PixelWidth;
-                double imgHeight = decoder.PixelHeight;
-
-                // Transcode to JPEG for embedding — reuse the softwareBitmap already decoded above
+                // Transcode to JPEG
                 using var jpegStream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
                 var encoder = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
                     Windows.Graphics.Imaging.BitmapEncoder.JpegEncoderId, jpegStream);
                 encoder.SetSoftwareBitmap(softwareBitmap);
                 await encoder.FlushAsync();
-
                 var jpegReader = new Windows.Storage.Streams.DataReader(jpegStream.GetInputStreamAt(0));
                 await jpegReader.LoadAsync((uint)jpegStream.Size);
                 var jpegBytes = new byte[jpegStream.Size];
                 jpegReader.ReadBytes(jpegBytes);
 
-                // Create page with image background
-                var pageSize = new iText.Kernel.Geom.PageSize((float)pageWidthPt, (float)pageHeightPt);
-                var outPage = outPdf.AddNewPage(pageSize);
-                var imgData = iText.IO.Image.ImageDataFactory.CreateJpeg(jpegBytes);
-                var canvas = new PdfCanvas(outPage);
-                canvas.AddImageFittedIntoRectangle(imgData,
-                    new iText.Kernel.Geom.Rectangle(0, 0, (float)pageWidthPt, (float)pageHeightPt), false);
+                // Create PDF page with image background
+                var outPage = outPdf.AddPage();
+                outPage.Width  = XUnit.FromPoint(pageWidthPt);
+                outPage.Height = XUnit.FromPoint(pageHeightPt);
 
-                // Add invisible OCR text layer
+                using var gfx = XGraphics.FromPdfPage(outPage);
+                using var ms  = new MemoryStream(jpegBytes);
+                var img = XImage.FromStream(() => new MemoryStream(jpegBytes));
+                gfx.DrawImage(img, 0, 0, pageWidthPt, pageHeightPt);
+
+                // Invisible text layer for searchability
                 if (ocrResult?.Text?.Length > 0)
                 {
-                    canvas.SetTextRenderingMode(PdfCanvasConstants.TextRenderingMode.INVISIBLE);
-                    canvas.BeginText();
-                    canvas.SetFontAndSize(font, 10);
-
+                    var font = new XFont("Arial", 1, XFontStyle.Regular);
                     foreach (var line in ocrResult.Lines)
                     {
                         foreach (var word in line.Words)
                         {
-                            // Map pixel coordinates to PDF points
-                            float x = (float)(word.BoundingRect.X / imgWidth * pageWidthPt);
-                            float y = (float)(pageHeightPt - (word.BoundingRect.Y + word.BoundingRect.Height) / imgHeight * pageHeightPt);
-                            float fontSize = (float)(word.BoundingRect.Height / imgHeight * pageHeightPt * 0.9);
-                            if (fontSize < 1) fontSize = 6;
-                            if (fontSize > 72) fontSize = 72;
-
-                            canvas.SetFontAndSize(font, fontSize);
-                            canvas.SetTextMatrix(x, y);
-                            canvas.ShowText(word.Text);
+                            double x  = word.BoundingRect.X      / imgWidth  * pageWidthPt;
+                            double y  = word.BoundingRect.Y      / imgHeight * pageHeightPt;
+                            double fs = word.BoundingRect.Height / imgHeight * pageHeightPt * 0.9;
+                            if (fs < 1) fs = 6; if (fs > 72) fs = 72;
+                            var wFont = new XFont("Arial", fs, XFontStyle.Regular);
+                            // Draw with transparent brush so text is searchable but invisible
+                            gfx.DrawString(word.Text, wFont, XBrushes.Transparent, new XPoint(x, y));
                         }
                     }
-
-                    canvas.EndText();
                 }
 
                 progress?.Report(((int)i + 1, totalPages, $"Page {i + 1}/{totalPages}"));
             }
 
+            outPdf.Save(outputPath);
             Logger.Info($"OCR completed: {outputPath} ({totalPages} pages)");
             return new OcrResult(outputPath, totalPages);
         }

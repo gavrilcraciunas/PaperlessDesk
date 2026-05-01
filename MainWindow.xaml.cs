@@ -20,6 +20,16 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         ViewModel = App.Services.GetRequiredService<MainViewModel>();
         ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+
+        // Mica backdrop for Windows 11 native feel
+        if (Microsoft.UI.Composition.SystemBackdrops.MicaController.IsSupported())
+        {
+            SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop
+            {
+                Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base
+            };
+        }
 
         FileListView.ItemsSource = ViewModel.Files;
 

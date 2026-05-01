@@ -24,7 +24,11 @@ public sealed partial class PdfView : UserControl
     private bool _thumbStripVisible = true;
     private readonly List<ThumbItem> _thumbItems = new();
 
-    public PdfView() => InitializeComponent();
+    public PdfView()
+    {
+        InitializeComponent();
+        Loaded += (_, _) => Tab_Click(TabPages, new RoutedEventArgs());
+    }
 
     public void Initialize(MainViewModel vm, Window win)
     {
