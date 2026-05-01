@@ -13,9 +13,35 @@ internal static class ViewHelpers
 {
     // ── Progress runner ───────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Runs <paramref name="work"/> with progress reporting.
+    /// If <paramref name="mainWindow"/> is supplied the inline status bar is used;
+    /// otherwise a modal ProgressDialog is shown.
+    /// </summary>
     public static async Task Run(XamlRoot root, string title,
-        Func<IProgress<(int, int, string)>, CancellationToken, Task> work)
+        Func<IProgress<(int, int, string)>, CancellationToken, Task> work,
+        MainWindow? mainWindow = null)
     {
+        if (mainWindow is not null)
+        {
+            var ct = mainWindow.BeginOperation(title);
+            try
+            {
+                var prog = new Progress<(int d, int t, string n)>(
+                    x => mainWindow.ReportProgress(x.d, x.t, x.n));
+                await work(prog, ct);
+                mainWindow.EndOperation();
+            }
+            catch (OperationCanceledException) { mainWindow.EndOperation("Cancelled."); }
+            catch (Exception ex)
+            {
+                mainWindow.EndOperation();
+                await Err(root, "Error", ex.Message);
+            }
+            return;
+        }
+
+        // Fallback: modal dialog (used when no MainWindow reference is available)
         var dlg = new ProgressDialog(root, title);
         _ = dlg.ShowAsync();
         try

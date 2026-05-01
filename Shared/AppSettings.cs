@@ -34,7 +34,6 @@ public class AppSettings
     {
         try
         {
-            RecentFiles = RecentFiles.Take(AppConstants.MaxRecentFiles).ToList();
             File.WriteAllText(SettingsPath(),
                 JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
         }

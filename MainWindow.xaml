@@ -22,6 +22,8 @@
               Padding="12,0,12,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>   <!-- App icon + name -->
+                <ColumnDefinition Width="Auto"/>   <!-- Features menu -->
+                <ColumnDefinition Width="Auto"/>   <!-- Help menu -->
                 <ColumnDefinition Width="*"/>      <!-- spacer -->
                 <ColumnDefinition Width="Auto"/>   <!-- settings -->
                 <ColumnDefinition Width="Auto"/>   <!-- license status -->
@@ -30,17 +32,147 @@
 
             <!-- App logo + name -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
-                        VerticalAlignment="Center">
-                <FontIcon Glyph="&#xE8A5;" FontSize="18"
-                          Foreground="{StaticResource BrandBlueBrush}"/>
+                        VerticalAlignment="Center" Margin="0,0,16,0">
+                <Image Source="Assets/logo_64_nobg.png"
+                       Width="32" Height="32"
+                       VerticalAlignment="Center"/>
                 <TextBlock Text="Paperless Desktop"
                            FontSize="14" FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource TextPrimaryBrush}"/>
             </StackPanel>
 
-            <!-- Settings -->
+            <!-- Features menu -->
+            <Button Grid.Column="1"
+                    x:Name="FeaturesMenuBtn"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource IconButtonStyle}"
+                    Width="Auto" Padding="10,6"
+                    ToolTipService.ToolTip="All features overview">
+                <Button.Flyout>
+                    <MenuFlyout Placement="Bottom">
+                        <MenuFlyoutSubItem Text="PDF Tools">
+                            <MenuFlyoutItem Text="Merge PDFs"          x:Name="FlyMergePdf"      Click="FlyMergePdf_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Split PDF"           x:Name="FlySplitPdf"      Click="FlySplitPdf_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C6;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Remove Pages"        x:Name="FlyRemovePages"   Click="FlyRemovePages_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Rotate Pages"        x:Name="FlyRotatePages"   Click="FlyRotatePages_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7AD;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Insert Pages"        x:Name="FlyInsertPages"   Click="FlyInsertPages_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE710;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="Password Protect"    x:Name="FlyPassword"      Click="FlyPassword_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE72E;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Unlock PDF"          x:Name="FlyUnlock"        Click="FlyUnlock_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE785;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="Edit Metadata"       x:Name="FlyMetadata"      Click="FlyMetadata_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE946;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="OCR PDF"             x:Name="FlyOcr"           Click="FlyOcr_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE9D9;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="PDF to Word"         x:Name="FlyPdfToDocx"     Click="FlyPdfToDocx_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8A5;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="PDF to Images"       x:Name="FlyPdfToImages"   Click="FlyPdfToImages_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEB9F;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Compress PDF"        x:Name="FlyCompress"      Click="FlyCompress_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE94D;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyoutSubItem>
+                        <MenuFlyoutSubItem Text="Image Tools">
+                            <MenuFlyoutItem Text="Resize Image"        x:Name="FlyResize"        Click="FlyResize_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8B8;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Crop Image"          x:Name="FlyCrop"          Click="FlyCrop_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7A8;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Rotate Image"        x:Name="FlyRotateImg"     Click="FlyRotateImg_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7AD;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Grayscale"           x:Name="FlyGrayscale"     Click="FlyGrayscale_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEB9F;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Images to PDF"       x:Name="FlyImagesToPdf"   Click="FlyImagesToPdf_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8A5;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyoutSubItem>
+                        <MenuFlyoutSubItem Text="Batch Operations">
+                            <MenuFlyoutItem Text="Batch Compress"      x:Name="FlyBatchCompress" Click="FlyBatchCompress_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE94D;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Batch OCR"           x:Name="FlyBatchOcr"      Click="FlyBatchOcr_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE9D9;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Batch Remove Pages"  x:Name="FlyBatchRemove"   Click="FlyBatchRemove_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Batch Rotate"        x:Name="FlyBatchRotate"   Click="FlyBatchRotate_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7AD;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Batch PDF to Images" x:Name="FlyBatchImages"   Click="FlyBatchImages_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEB9F;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="Export Batch Report" x:Name="FlyExportReport"  Click="FlyExportReport_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE9F9;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyoutSubItem>
+                    </MenuFlyout>
+                </Button.Flyout>
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <FontIcon Glyph="&#xEA40;" FontSize="13"/>
+                    <TextBlock Text="Features" FontSize="13"/>
+                    <FontIcon Glyph="&#xE70D;" FontSize="9" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
+            <!-- Help menu -->
             <Button Grid.Column="2"
+                    x:Name="HelpMenuBtn"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource IconButtonStyle}"
+                    Width="Auto" Padding="10,6"
+                    Margin="2,0,0,0"
+                    ToolTipService.ToolTip="Help">
+                <Button.Flyout>
+                    <MenuFlyout Placement="Bottom">
+                        <MenuFlyoutItem Text="Quick Start Guide"       Click="HelpQuickStart_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE82D;"/></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Keyboard Shortcuts"      Click="HelpShortcuts_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE92E;"/></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator/>
+                        <MenuFlyoutItem Text="About Paperless Desktop" Click="HelpAbout_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE946;"/></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Send Feedback"           Click="HelpFeedback_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xED15;"/></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                    </MenuFlyout>
+                </Button.Flyout>
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <FontIcon Glyph="&#xE897;" FontSize="13"/>
+                    <TextBlock Text="Help" FontSize="13"/>
+                    <FontIcon Glyph="&#xE70D;" FontSize="9" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
+            <!-- Settings -->
+            <Button Grid.Column="4"
                     x:Name="SettingsBtn"
                     Click="SettingsBtn_Click"
                     Style="{StaticResource IconButtonStyle}"
@@ -52,7 +184,7 @@
             </Button>
 
             <!-- License badge -->
-            <Border Grid.Column="3"
+            <Border Grid.Column="5"
                     x:Name="LicenseBadge"
                     CornerRadius="12"
                     Padding="10,4"
@@ -64,7 +196,7 @@
             </Border>
 
             <!-- Activate Pro button -->
-            <Button Grid.Column="4"
+            <Button Grid.Column="6"
                     x:Name="ActivateBtn"
                     Content="Activate Pro"
                     Click="ActivateBtn_Click"
@@ -99,26 +231,44 @@
                     <RowDefinition Height="Auto"/>   <!-- reorder -->
                 </Grid.RowDefinitions>
 
-                <!-- Toolbar: Add / Remove / Clear -->
-                <Grid Grid.Row="0" Padding="8,8,8,4">
+                <!-- Toolbar: Add (split) / Remove / Clear -->
+                <Grid Grid.Row="0" Padding="8,8,8,4" RowSpacing="6">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <Button Grid.Column="0"
-                            x:Name="AddBtn"
-                            Click="AddBtn_Click"
-                            Style="{StaticResource AccentButtonStyle}"
-                            CornerRadius="6"
-                            Padding="12,7"
-                            HorizontalAlignment="Stretch">
+                    <!-- Split Add button -->
+                    <SplitButton Grid.Column="0"
+                                 x:Name="AddBtn"
+                                 Click="AddBtn_Click"
+                                 Style="{StaticResource AccentSplitButtonStyle}"
+                                 Padding="12,7"
+                                 HorizontalAlignment="Stretch">
+                        <SplitButton.Flyout>
+                            <MenuFlyout Placement="Bottom">
+                                <MenuFlyoutItem Text="Add Files…"  Click="AddFilesMenu_Click">
+                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8E5;"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem Text="Add Folder…" Click="AddFolderBtn_Click">
+                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8B7;"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator/>
+                                <MenuFlyoutItem x:Name="RecentFilesMenu" Text="Recent Files" Click="RecentFiles_Click">
+                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE81C;"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                            </MenuFlyout>
+                        </SplitButton.Flyout>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE710;" FontSize="13"/>
                             <TextBlock Text="Add Files" FontSize="13"/>
                         </StackPanel>
-                    </Button>
+                    </SplitButton>
 
                     <Button Grid.Column="1"
                             x:Name="RemoveBtn"
@@ -139,6 +289,15 @@
                             ToolTipService.ToolTip="Clear all files">
                         <FontIcon Glyph="&#xE74D;" FontSize="14"/>
                     </Button>
+
+                    <!-- Filter box -->
+                    <TextBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                             x:Name="FilterBox"
+                             PlaceholderText="&#xE71E;  Filter files…"
+                             TextChanged="FilterBox_TextChanged"
+                             CornerRadius="6"
+                             FontSize="12"
+                             Padding="8,5"/>
                 </Grid>
 
                 <!-- Section label -->
@@ -236,42 +395,24 @@
                     </ListView>
                 </Grid>
 
-                <!-- Reorder strip -->
-                <Grid Grid.Row="2" Padding="8,4,8,8">
+                <!-- Bottom strip: file count + selection count -->
+                <Grid Grid.Row="2" Padding="12,4,12,8">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-
-                    <Button Grid.Column="0"
-                            x:Name="MoveUpBtn"
-                            Click="MoveUpBtn_Click"
-                            Style="{StaticResource IconButtonStyle}"
-                            IsEnabled="False"
-                            ToolTipService.ToolTip="Move up">
-                        <FontIcon Glyph="&#xE74A;" FontSize="13"/>
-                    </Button>
-
-                    <Button Grid.Column="1"
-                            x:Name="MoveDownBtn"
-                            Click="MoveDownBtn_Click"
-                            Style="{StaticResource IconButtonStyle}"
-                            Margin="4,0,0,0"
-                            IsEnabled="False"
-                            ToolTipService.ToolTip="Move down">
-                        <FontIcon Glyph="&#xE74B;" FontSize="13"/>
-                    </Button>
-
-                    <TextBlock Grid.Column="2"
+                    <TextBlock Grid.Column="0"
                                x:Name="FileCountBlock"
                                Text="0 files"
                                FontSize="11"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               VerticalAlignment="Center"
-                               HorizontalAlignment="Right"
-                               Margin="0,0,4,0"/>
+                               VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1"
+                               x:Name="SelectionCountBlock"
+                               Text=""
+                               FontSize="11"
+                               Foreground="{StaticResource BrandBlueBrush}"
+                               VerticalAlignment="Center"/>
                 </Grid>
             </Grid>
 
@@ -304,6 +445,8 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0"
@@ -314,17 +457,33 @@
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"/>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
-                            VerticalAlignment="Center">
-                    <ProgressBar x:Name="StatusProgress"
-                                 Width="120" Height="4"
-                                 IsIndeterminate="True"
-                                 Visibility="Collapsed"/>
-                    <TextBlock x:Name="SelectionCountBlock"
-                               Text=""
-                               FontSize="11"
-                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                </StackPanel>
+                <!-- Determinate progress shown inline during operations -->
+                <TextBlock Grid.Column="1"
+                           x:Name="InlineStatusLabel"
+                           FontSize="11"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0"
+                           Visibility="Collapsed"/>
+
+                <ProgressBar Grid.Column="2"
+                             x:Name="StatusProgress"
+                             Width="140" Height="4"
+                             Minimum="0" Maximum="100"
+                             IsIndeterminate="False"
+                             VerticalAlignment="Center"
+                             Margin="0,0,8,0"
+                             Visibility="Collapsed"/>
+
+                <Button Grid.Column="3"
+                        x:Name="InlineCancelBtn"
+                        Click="StatusCancelBtn_Click"
+                        Style="{StaticResource IconButtonStyle}"
+                        Width="20" Height="20"
+                        Visibility="Collapsed"
+                        ToolTipService.ToolTip="Cancel operation">
+                    <FontIcon Glyph="&#xE711;" FontSize="9"/>
+                </Button>
             </Grid>
         </Border>
 

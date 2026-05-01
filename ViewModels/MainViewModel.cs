@@ -159,17 +159,21 @@ public partial class MainViewModel : ObservableObject
     // Private
     // -------------------------------------------------------------------------
 
-    private void LoadRecentFiles()
+    private async void LoadRecentFiles()
     {
-        foreach (var path in _settings.RecentFiles)
+        var recent = _settings.RecentFiles.ToList();
+        foreach (var path in recent)
         {
             if (!File.Exists(path)) continue;
             var ext       = Path.GetExtension(path).ToLowerInvariant();
             var pageCount = "";
             if (ext == ".pdf")
             {
-                try { pageCount = PdfCoreService.GetPageCount(path).ToString(); }
-                catch { pageCount = "?"; }
+                pageCount = await Task.Run(() =>
+                {
+                    try { return PdfCoreService.GetPageCount(path).ToString(); }
+                    catch { return "?"; }
+                });
             }
             Files.Add(new FileItemViewModel(path, pageCount));
         }

@@ -3,6 +3,13 @@ using PaperlessDesktop.ViewModels;
 
 namespace PaperlessDesktop.Controls;
 
+/// <summary>Simple data item for the thumbnail strip.</summary>
+internal sealed class ThumbItem
+{
+    public BitmapImage? Bitmap { get; init; }
+    public string Label { get; init; } = "";
+}
+
 public sealed partial class PdfView : UserControl
 {
     private MainViewModel _vm = null!;
@@ -11,6 +18,11 @@ public sealed partial class PdfView : UserControl
     private Windows.Data.Pdf.PdfDocument? _pdf;
     private uint _currentPage;
     private uint _totalPages;
+
+    // zoom / thumbnail state
+    private double _zoomFactor = 1.0;          // current render scale
+    private bool _thumbStripVisible = true;
+    private readonly List<ThumbItem> _thumbItems = new();
 
     public PdfView() => InitializeComponent();
 
@@ -37,10 +49,14 @@ public sealed partial class PdfView : UserControl
             var file = await StorageFile.GetFileFromPathAsync(path);
             _pdf = await Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file);
             _totalPages = _pdf.PageCount;
+            ActionPanelFileName.Text = Path.GetFileName(path);
+            ActionPanelInfo.Text     = $"PDF · {_totalPages} page{(_totalPages == 1 ? "" : "s")}";
             PageLabel.Text = $"1 / {_totalPages}";
             PrevPageBtn.IsEnabled = false;
             NextPageBtn.IsEnabled = _totalPages > 1;
+            ResetZoom();
             await RenderPageAsync(0);
+            _ = LoadThumbnailsAsync();
         }
         catch { }
 
@@ -53,14 +69,66 @@ public sealed partial class PdfView : UserControl
         _totalPages = 0;
         _currentPage = 0;
         PageImage.Source = null;
-        FileNameBlock.Text = "";
+        FileNameBlock.Text       = "";
+        ActionPanelFileName.Text = "";
+        ActionPanelInfo.Text     = "";
         PageLabel.Text = "0 / 0";
         PrevPageBtn.IsEnabled = false;
         NextPageBtn.IsEnabled = false;
+        _thumbItems.Clear();
+        ThumbRepeater.ItemsSource = null;
+        ResetZoom();
         RefreshButtons();
     }
 
-    // ── Page navigation ───────────────────────────────────────────────────────
+    // ── Public invoke entry points (for Features flyout in MainWindow) ─────────
+
+    public void InvokeMerge()        => MergePdfs_Click(this, new RoutedEventArgs());
+    public void InvokeSplit()        => SplitPdf_Click(this, new RoutedEventArgs());
+    public void InvokeRemovePages()  => RemovePages_Click(this, new RoutedEventArgs());
+    public void InvokeRotate()       => RotatePages_Click(this, new RoutedEventArgs());
+    public void InvokeInsert()       => InsertPages_Click(this, new RoutedEventArgs());
+    public void InvokePassword()     => PasswordProtect_Click(this, new RoutedEventArgs());
+    public void InvokeUnlock()       => UnlockPdf_Click(this, new RoutedEventArgs());
+    public void InvokeMetadata()     => EditMetadata_Click(this, new RoutedEventArgs());
+    public void InvokeOcr()         => OcrPdf_Click(this, new RoutedEventArgs());
+    public void InvokePdfToDocx()   => PdfToDocx_Click(this, new RoutedEventArgs());
+    public void InvokePdfToImages() => PdfToImages_Click(this, new RoutedEventArgs());
+    public void InvokeCompress()     => CompressPdf_Click(this, new RoutedEventArgs());
+    public void InvokeBatchCompress()=> BatchCompress_Click(this, new RoutedEventArgs());
+    public void InvokeBatchOcr()     => BatchOcr_Click(this, new RoutedEventArgs());
+    public void InvokeBatchRemove()  => BatchRemove_Click(this, new RoutedEventArgs());
+    public void InvokeBatchRotate()  => BatchRotate_Click(this, new RoutedEventArgs());
+    public void InvokeBatchImages()  => BatchPdfImages_Click(this, new RoutedEventArgs());
+    public void InvokeExportReport() => ExportReport_Click(this, new RoutedEventArgs());
+
+    // ── Tab navigation ────────────────────────────────────────────────────────
+
+    private void Tab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn) return;
+        var tag = btn.Tag as string;
+
+        PanePages.Visibility    = tag == "pages"    ? Visibility.Visible : Visibility.Collapsed;
+        PaneSecurity.Visibility = tag == "security" ? Visibility.Visible : Visibility.Collapsed;
+        PaneConvert.Visibility  = tag == "convert"  ? Visibility.Visible : Visibility.Collapsed;
+        PaneOptimise.Visibility = tag == "optimise" ? Visibility.Visible : Visibility.Collapsed;
+        PaneBatch.Visibility    = tag == "batch"    ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var tb in new[] { TabPages, TabSecurity, TabConvert, TabOptimise, TabBatch })
+        {
+            bool active = tb == btn;
+            tb.Foreground      = active
+                ? (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BrandBlueBrush"]
+                : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextSecondaryBrush"];
+            tb.BorderThickness = active ? new Thickness(0, 0, 0, 2) : new Thickness(0);
+            tb.BorderBrush     = active
+                ? (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BrandBlueBrush"]
+                : null;
+        }
+    }
+
+    // ── Page navigation
 
     private async void PrevPageBtn_Click(object s, RoutedEventArgs e)
     {
@@ -88,12 +156,132 @@ public sealed partial class PdfView : UserControl
     {
         if (_pdf is null) return;
         using var page = _pdf.GetPage(pageIndex);
+
+        // scale based on zoom; base resolution: fit to 800px wide @ 100%
+        var opts = new Windows.Data.Pdf.PdfPageRenderOptions
+        {
+            DestinationWidth = (uint)Math.Max(100, 800 * _zoomFactor)
+        };
         var stream = new InMemoryRandomAccessStream();
-        await page.RenderToStreamAsync(stream);
+        await page.RenderToStreamAsync(stream, opts);
         var bmp = new BitmapImage();
         await bmp.SetSourceAsync(stream);
         PageImage.Source = bmp;
+        PageImage.Width  = bmp.PixelWidth;
+        PageImage.Height = bmp.PixelHeight;
         PageLabel.Text = $"{pageIndex + 1} / {_totalPages}";
+        HighlightThumb(pageIndex);
+    }
+
+    // ── Zoom ──────────────────────────────────────────────────────────────────
+
+    private void ResetZoom()
+    {
+        _zoomFactor = 1.0;
+        ZoomSlider.Value = 100;
+        ZoomLabel.Text = "100%";
+    }
+
+    private async void ApplyZoom(double factor)
+    {
+        _zoomFactor = Math.Clamp(factor, 0.25, 4.0);
+        ZoomSlider.Value = Math.Round(_zoomFactor * 100);
+        ZoomLabel.Text = $"{(int)ZoomSlider.Value}%";
+        await RenderPageAsync(_currentPage);
+    }
+
+    private void ZoomSlider_ValueChanged(object s, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        double factor = e.NewValue / 100.0;
+        if (Math.Abs(factor - _zoomFactor) < 0.01) return;
+        _zoomFactor = Math.Clamp(factor, 0.25, 4.0);
+        ZoomLabel.Text = $"{(int)e.NewValue}%";
+        _ = RenderPageAsync(_currentPage);
+    }
+
+    private async void ZoomFitWidth_Click(object s, RoutedEventArgs e)
+    {
+        if (_pdf is null) return;
+        using var page = _pdf.GetPage(_currentPage);
+        double viewW = PreviewScroller.ActualWidth - 32; // 16 margin each side
+        double factor = viewW / page.Size.Width;
+        await Task.CompletedTask; // keep async chain consistent
+        ApplyZoom(factor);
+    }
+
+    private async void ZoomFitPage_Click(object s, RoutedEventArgs e)
+    {
+        if (_pdf is null) return;
+        using var page = _pdf.GetPage(_currentPage);
+        double viewW = PreviewScroller.ActualWidth - 32;
+        double viewH = PreviewScroller.ActualHeight - 32;
+        double fw = viewW / page.Size.Width;
+        double fh = viewH / page.Size.Height;
+        await Task.CompletedTask;
+        ApplyZoom(Math.Min(fw, fh));
+    }
+
+    private void ZoomReset_Click(object s, RoutedEventArgs e)
+    {
+        ApplyZoom(1.0);
+    }
+
+    // ── Thumbnails ────────────────────────────────────────────────────────────
+
+    private void ThumbToggle_Click(object s, RoutedEventArgs e)
+    {
+        _thumbStripVisible = !_thumbStripVisible;
+        ThumbScroller.Visibility = _thumbStripVisible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async Task LoadThumbnailsAsync()
+    {
+        if (_pdf is null) return;
+        _thumbItems.Clear();
+        ThumbRepeater.ItemsSource = null;
+
+        var items = new List<ThumbItem>();
+        var renderOpts = new Windows.Data.Pdf.PdfPageRenderOptions { DestinationWidth = 52 };
+        for (uint i = 0; i < _totalPages; i++)
+        {
+            using var page = _pdf.GetPage(i);
+            var stream = new InMemoryRandomAccessStream();
+            await page.RenderToStreamAsync(stream, renderOpts);
+            var bmp = new BitmapImage();
+            await bmp.SetSourceAsync(stream);
+            items.Add(new ThumbItem { Bitmap = bmp, Label = $"{i + 1}" });
+        }
+
+        _thumbItems.AddRange(items);
+        ThumbRepeater.ItemsSource = _thumbItems;
+        HighlightThumb(0);
+    }
+
+    private void HighlightThumb(uint pageIndex)
+    {
+        // Walk visible ThumbBorder elements and update border color
+        for (int i = 0; i < _thumbItems.Count; i++)
+        {
+            if (ThumbRepeater.TryGetElement(i) is Border b)
+            {
+                bool active = (uint)i == pageIndex;
+                b.BorderBrush = active
+                    ? (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BrandBlueBrush"]
+                    : new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            }
+        }
+    }
+
+    private async void Thumb_Tapped(object s, TappedRoutedEventArgs e)
+    {
+        if (s is not Border b) return;
+        int idx = ThumbRepeater.GetElementIndex(b);
+        if (idx < 0 || idx >= (int)_totalPages) return;
+        _currentPage = (uint)idx;
+        PrevPageBtn.IsEnabled = _currentPage > 0;
+        NextPageBtn.IsEnabled = _currentPage < _totalPages - 1;
+        await RenderPageAsync(_currentPage);
     }
 
     // ── Button state ──────────────────────────────────────────────────────────
@@ -148,7 +336,7 @@ public sealed partial class PdfView : UserControl
     private Task<string?> Folder() => ViewHelpers.PickFolder(_win);
 
     private Task Run(string title, Func<IProgress<(int, int, string)>, CancellationToken, Task> work)
-        => ViewHelpers.Run(Root, title, work);
+        => ViewHelpers.Run(Root, title, work, _win as MainWindow);
 
     // ── PDF Actions ───────────────────────────────────────────────────────────
 

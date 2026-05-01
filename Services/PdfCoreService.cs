@@ -13,6 +13,8 @@ using iTextPdfDocument = iText.Kernel.Pdf.PdfDocument;
 using iTextReader = iText.Kernel.Pdf.PdfReader;
 using iTextWriter = iText.Kernel.Pdf.PdfWriter;
 
+namespace PaperlessDesktop.Services;
+
 public class PdfCoreService
 {
     // ── Result types ─────────────────────────────────────────────────────────
@@ -321,24 +323,10 @@ public class PdfCoreService
             return Enumerable.Range(1, total).ToList();
         }
 
-        var result = new List<int>();
-        var parts = spec.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var part in parts)
-        {
-            if (part.Contains('-'))
-            {
-                var range = part.Split('-');
-                int start = int.Parse(range[0].Trim());
-                int end = int.Parse(range[1].Trim());
-                for (int i = start; i <= end; i++)
-                    result.Add(i);
-            }
-            else
-            {
-                result.Add(int.Parse(part.Trim()));
-            }
-        }
-        return result.Distinct().ToList();
+        return ParseRanges(spec)
+            .SelectMany(r => Enumerable.Range(r.start, r.end - r.start + 1))
+            .Distinct()
+            .ToList();
     }
 
     private List<(int start, int end)> ParseRanges(string input)

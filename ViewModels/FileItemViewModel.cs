@@ -10,7 +10,8 @@ public partial class FileItemViewModel : ObservableObject
     [ObservableProperty] private string _fileName = "";
     [ObservableProperty] private string _fileType = "";
     [ObservableProperty] private string _pageCount = "";
-    [ObservableProperty] private bool _isSelected = false;
+    [ObservableProperty] private bool _isSelected    = false;
+    [ObservableProperty] private bool _isFilteredOut = false;
 
     public FileItemViewModel(string path, string pageCount = "")
     {
@@ -22,6 +23,9 @@ public partial class FileItemViewModel : ObservableObject
 
     public string DisplayName => string.IsNullOrEmpty(PageCount) ? FileName : $"{FileName}  [{PageCount}p]";
 
+    private SolidColorBrush? _badgeBrush;
+    private SolidColorBrush? _iconBrush;
+
     // File type glyph (Segoe MDL2 Assets)
     public string FileTypeGlyph => FileType switch
     {
@@ -32,8 +36,8 @@ public partial class FileItemViewModel : ObservableObject
         _ => "\uE8B7"         // Page
     };
 
-    // Badge background color
-    public SolidColorBrush FileTypeBadgeBrush => FileType switch
+    // Badge background color — cached per instance to avoid allocations on every binding pass
+    public SolidColorBrush FileTypeBadgeBrush => _badgeBrush ??= FileType switch
     {
         "PDF"  => new SolidColorBrush(Color.FromArgb(255, 255, 235, 235)),
         "DOCX" or "DOC" => new SolidColorBrush(Color.FromArgb(255, 220, 237, 255)),
@@ -44,8 +48,8 @@ public partial class FileItemViewModel : ObservableObject
         _      => new SolidColorBrush(Color.FromArgb(255, 230, 230, 245))
     };
 
-    // Badge text + icon foreground color
-    public SolidColorBrush FileTypeIconBrush => FileType switch
+    // Badge text + icon foreground color — cached per instance
+    public SolidColorBrush FileTypeIconBrush => _iconBrush ??= FileType switch
     {
         "PDF"  => new SolidColorBrush(Color.FromArgb(255, 190, 50, 50)),
         "DOCX" or "DOC" => new SolidColorBrush(Color.FromArgb(255, 40, 100, 200)),

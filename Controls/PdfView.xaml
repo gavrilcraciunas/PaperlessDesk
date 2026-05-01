@@ -15,7 +15,10 @@
         <Grid Grid.Column="0" Background="{StaticResource PanelBrush}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="1"/>
+                <RowDefinition Height="84"/>
             </Grid.RowDefinitions>
 
             <!-- Preview toolbar -->
@@ -52,366 +55,491 @@
                 </StackPanel>
             </Grid>
 
+            <!-- Zoom bar -->
+            <Grid Grid.Row="1" Padding="10,4" Background="{StaticResource SidebarBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button x:Name="ZoomFitWidthBtn" Grid.Column="0"
+                        Click="ZoomFitWidth_Click"
+                        Style="{StaticResource IconButtonStyle}"
+                        ToolTipService.ToolTip="Fit to width">
+                    <FontIcon Glyph="&#xE740;" FontSize="13"/>
+                </Button>
+                <Button x:Name="ZoomFitPageBtn" Grid.Column="1"
+                        Click="ZoomFitPage_Click"
+                        Style="{StaticResource IconButtonStyle}"
+                        ToolTipService.ToolTip="Fit whole page">
+                    <FontIcon Glyph="&#xE744;" FontSize="13"/>
+                </Button>
+                <Button x:Name="ZoomResetBtn" Grid.Column="2"
+                        Click="ZoomReset_Click"
+                        Style="{StaticResource IconButtonStyle}"
+                        ToolTipService.ToolTip="Actual size (100%)">
+                    <FontIcon Glyph="&#xE9A6;" FontSize="13"/>
+                </Button>
+                <Slider x:Name="ZoomSlider" Grid.Column="3"
+                        Minimum="25" Maximum="400" Value="100"
+                        TickFrequency="25" StepFrequency="5"
+                        Margin="6,0"
+                        VerticalAlignment="Center"
+                        ValueChanged="ZoomSlider_ValueChanged"
+                        ToolTipService.ToolTip="Zoom level"/>
+                <TextBlock x:Name="ZoomLabel" Grid.Column="4"
+                           Text="100%"
+                           FontSize="11" MinWidth="38" TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                <Button x:Name="ThumbToggleBtn" Grid.Column="5"
+                        Click="ThumbToggle_Click"
+                        Style="{StaticResource IconButtonStyle}"
+                        ToolTipService.ToolTip="Toggle thumbnail strip"
+                        Margin="4,0,0,0">
+                    <FontIcon Glyph="&#xE8A1;" FontSize="13"/>
+                </Button>
+            </Grid>
+
             <!-- Page image -->
-            <ScrollViewer Grid.Row="1"
+            <ScrollViewer x:Name="PreviewScroller"
+                          Grid.Row="2"
                           HorizontalScrollBarVisibility="Auto"
                           VerticalScrollBarVisibility="Auto"
-                          ZoomMode="Enabled">
+                          ZoomMode="Disabled">
                 <Image x:Name="PageImage"
-                       Stretch="Uniform"
+                       Stretch="None"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Top"
                        Margin="16"/>
             </ScrollViewer>
+
+            <!-- Separator -->
+            <Border Grid.Row="3" Background="{StaticResource SeparatorBrush}"/>
+
+            <!-- Thumbnail strip -->
+            <ScrollViewer x:Name="ThumbScroller"
+                          Grid.Row="4"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Hidden"
+                          Background="{StaticResource SidebarBrush}">
+                <ItemsRepeater x:Name="ThumbRepeater"
+                               Margin="8,6">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Orientation="Horizontal" Spacing="6"/>
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate>
+                            <Border x:Name="ThumbBorder"
+                                    Width="52" Height="70"
+                                    CornerRadius="3"
+                                    BorderThickness="2"
+                                    BorderBrush="Transparent"
+                                    Background="Transparent"
+                                    Tapped="Thumb_Tapped"
+                                    ToolTipService.ToolTip="{Binding Label}">
+                                <StackPanel>
+                                    <Image Source="{Binding Bitmap}"
+                                           Width="48" Height="56"
+                                           Stretch="Uniform"/>
+                                    <TextBlock Text="{Binding Label}"
+                                               FontSize="9"
+                                               HorizontalAlignment="Center"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
         </Grid>
 
-        <!-- Separator -->
-        <Border Grid.Column="1" Background="{StaticResource SeparatorBrush}"/>
-
-        <!-- ── RIGHT: PDF ACTIONS ─────────────────────────────────────────── -->
+        <!-- ── RIGHT: PDF ACTIONS (tabbed) ──────────────────────────────── -->
         <Grid Grid.Column="2" Background="{StaticResource PanelBrush}">
-            <ScrollViewer Padding="10,8,10,12"
-                          VerticalScrollBarVisibility="Auto">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>  <!-- context header -->
+                <RowDefinition Height="Auto"/>  <!-- tab strip -->
+                <RowDefinition Height="1"/>     <!-- separator -->
+                <RowDefinition Height="*"/>     <!-- tab content -->
+            </Grid.RowDefinitions>
+
+            <!-- Context header: filename + page count -->
+            <Border Grid.Row="0" Background="{StaticResource SidebarBrush}"
+                    Padding="12,8,12,8">
                 <StackPanel Spacing="2">
+                    <TextBlock x:Name="ActionPanelFileName"
+                               FontSize="12" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock x:Name="ActionPanelInfo"
+                               FontSize="11"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                </StackPanel>
+            </Border>
 
-                    <!-- PAGES -->
-                    <TextBlock Text="PAGES" Style="{StaticResource SectionHeaderStyle}"/>
+            <!-- Tab strip -->
+            <ScrollViewer Grid.Row="1"
+                          HorizontalScrollBarVisibility="Hidden"
+                          VerticalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="TabStrip"
+                            Orientation="Horizontal"
+                            Background="{StaticResource SidebarBrush}">
+                    <Button x:Name="TabPages"    Content="Pages"    Click="Tab_Click" Tag="pages"
+                            Style="{StaticResource PanelTabButtonStyle}"/>
+                    <Button x:Name="TabSecurity" Content="Security" Click="Tab_Click" Tag="security"
+                            Style="{StaticResource PanelTabButtonStyle}"/>
+                    <Button x:Name="TabConvert"  Content="Convert"  Click="Tab_Click" Tag="convert"
+                            Style="{StaticResource PanelTabButtonStyle}"/>
+                    <Button x:Name="TabOptimise" Content="Optimise" Click="Tab_Click" Tag="optimise"
+                            Style="{StaticResource PanelTabButtonStyle}"/>
+                    <Button x:Name="TabBatch"    Content="Batch"    Click="Tab_Click" Tag="batch"
+                            Style="{StaticResource PanelTabButtonStyle}"/>
+                </StackPanel>
+            </ScrollViewer>
 
-                    <Button x:Name="BtnMerge" Click="MergePdfs_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}"
-                            ToolTipService.ToolTip="Merge selected PDFs into one file">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE8C8;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <TextBlock Text="Merge PDFs" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Combine multiple files" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Button>
+            <Border Grid.Row="2" Background="{StaticResource SeparatorBrush}"/>
 
-                    <Button x:Name="BtnRemovePages" Click="RemovePages_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}"
-                            ToolTipService.ToolTip="Delete specific pages from a PDF">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE74D;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <TextBlock Text="Remove Pages" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Delete by number or range" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Button>
+            <!-- Tab content panels -->
+            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="10,8,10,12" Spacing="2">
 
-                    <Button x:Name="BtnRotate" Click="RotatePages_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}"
-                            ToolTipService.ToolTip="Rotate pages by 90/180/270 degrees">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE7AD;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <TextBlock Text="Rotate Pages" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="90 · 180 · 270 degrees" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Button>
-
-                    <Button x:Name="BtnInsert" Click="InsertPages_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}"
-                            ToolTipService.ToolTip="Insert pages from another PDF [PRO]">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE710;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Insert Pages" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                    <!-- ── PAGES ───────────────────────────────────────── -->
+                    <StackPanel x:Name="PanePages" Spacing="2">
+                        <Button x:Name="BtnMerge" Click="MergePdfs_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}"
+                                ToolTipService.ToolTip="Combine selected PDFs into one file">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE8C8;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <TextBlock Text="Merge PDFs" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Combine multiple files" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="From another PDF" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
 
-                    <!-- SECURITY -->
-                    <TextBlock Text="SECURITY" Style="{StaticResource SectionHeaderStyle}"/>
-
-                    <Button x:Name="BtnPassword" Click="PasswordProtect_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE72E;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Password Protect" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                        <Button x:Name="BtnRemovePages" Click="RemovePages_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}"
+                                ToolTipService.ToolTip="Delete pages by number or range">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE74D;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <TextBlock Text="Remove Pages" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Delete by number or range" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Encrypt with password" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
 
-                    <Button x:Name="BtnUnlock" Click="UnlockPdf_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE785;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Unlock PDF" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                        <Button x:Name="BtnRotate" Click="RotatePages_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}"
+                                ToolTipService.ToolTip="Rotate pages 90, 180 or 270 degrees">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE7AD;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <TextBlock Text="Rotate Pages" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="90 · 180 · 270 degrees" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Remove password" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
 
-                    <!-- METADATA -->
-                    <TextBlock Text="METADATA" Style="{StaticResource SectionHeaderStyle}"/>
-
-                    <Button x:Name="BtnMetadata" Click="EditMetadata_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE946;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Edit Metadata" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                        <Button x:Name="BtnInsert" Click="InsertPages_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}"
+                                ToolTipService.ToolTip="Insert pages from another PDF [PRO]">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE710;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Insert Pages" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="From another PDF" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Title, author, keywords" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
 
-                    <!-- OCR &amp; CONVERT -->
-                    <TextBlock Text="OCR &amp; CONVERT" Style="{StaticResource SectionHeaderStyle}"/>
-
-                    <Button x:Name="BtnOcr" Click="OcrPdf_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE9D9;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="OCR PDF" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                        <Button x:Name="BtnSplit" Click="SplitPdf_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}"
+                                ToolTipService.ToolTip="Split into chunks or custom ranges [PRO]">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE8C6;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Split PDF" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="By pages or custom ranges" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Make scanned PDFs searchable" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
+                    </StackPanel>
 
-                    <Button x:Name="BtnToDocx" Click="PdfToDocx_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE8A5;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="PDF → Word" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                    <!-- ── SECURITY ─────────────────────────────────────── -->
+                    <StackPanel x:Name="PaneSecurity" Spacing="2" Visibility="Collapsed">
+                        <Button x:Name="BtnPassword" Click="PasswordProtect_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE72E;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Password Protect" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Encrypt with AES-256" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Export as editable DOCX" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
 
-                    <Button x:Name="BtnToImages" Click="PdfToImages_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xEB9F;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="PDF → Images" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                        <Button x:Name="BtnUnlock" Click="UnlockPdf_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE785;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Unlock PDF" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Remove password" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Export pages as PNG/JPG" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
 
-                    <!-- OPTIMISE -->
-                    <TextBlock Text="OPTIMISE" Style="{StaticResource SectionHeaderStyle}"/>
-
-                    <Button x:Name="BtnCompress" Click="CompressPdf_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE94D;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Compress PDF" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                        <Button x:Name="BtnMetadata" Click="EditMetadata_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE946;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Edit Metadata" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Title, author, keywords" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Reduce file size" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
+                    </StackPanel>
 
-                    <Button x:Name="BtnSplit" Click="SplitPdf_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE8C6;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Split PDF" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                    <!-- ── CONVERT ──────────────────────────────────────── -->
+                    <StackPanel x:Name="PaneConvert" Spacing="2" Visibility="Collapsed">
+                        <Button x:Name="BtnOcr" Click="OcrPdf_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE9D9;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="OCR PDF" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Make scanned PDFs searchable" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="By pages or custom ranges" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
 
-                    <!-- BATCH -->
-                    <TextBlock Text="BATCH" Style="{StaticResource SectionHeaderStyle}"/>
-
-                    <Button x:Name="BtnBatchCompress" Click="BatchCompress_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE94D;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Batch Compress" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                        <Button x:Name="BtnToDocx" Click="PdfToDocx_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE8A5;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="PDF to Word" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Export as editable DOCX" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Compress all / selected PDFs" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
 
-                    <Button x:Name="BtnBatchOcr" Click="BatchOcr_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE9D9;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Batch OCR" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                        <Button x:Name="BtnToImages" Click="PdfToImages_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xEB9F;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="PDF to Images" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Export pages as PNG / JPG" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="OCR all / selected PDFs" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
+                    </StackPanel>
 
-                    <Button x:Name="BtnBatchRemove" Click="BatchRemove_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE74D;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Batch Remove Pages" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                    <!-- ── OPTIMISE ─────────────────────────────────────── -->
+                    <StackPanel x:Name="PaneOptimise" Spacing="2" Visibility="Collapsed">
+                        <Button x:Name="BtnCompress" Click="CompressPdf_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE94D;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Compress PDF" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Reduce file size" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Same pages from all PDFs" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
+                    </StackPanel>
 
-                    <Button x:Name="BtnBatchRotate" Click="BatchRotate_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE7AD;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Batch Rotate" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                    <!-- ── BATCH ────────────────────────────────────────── -->
+                    <StackPanel x:Name="PaneBatch" Spacing="2" Visibility="Collapsed">
+                        <Button x:Name="BtnBatchCompress" Click="BatchCompress_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE94D;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Batch Compress" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Compress all / selected PDFs" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Rotate all / selected PDFs" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
 
-                    <Button x:Name="BtnBatchToImages" Click="BatchPdfImages_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xEB9F;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Batch PDF → Images" FontSize="13" FontWeight="SemiBold"/>
-                                    <Border Background="{StaticResource ProGoldLightBrush}"
-                                            CornerRadius="4" Padding="5,1">
-                                        <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
-                                                   Foreground="{StaticResource ProGoldBrush}"/>
-                                    </Border>
+                        <Button x:Name="BtnBatchOcr" Click="BatchOcr_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE9D9;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Batch OCR" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="OCR all / selected PDFs" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Text="Export pages from all PDFs" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
 
-                    <!-- REPORTS -->
-                    <TextBlock Text="REPORTS" Style="{StaticResource SectionHeaderStyle}"/>
-
-                    <Button x:Name="BtnExportReport" Click="ExportReport_Click" IsEnabled="False"
-                            Style="{StaticResource ActionButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon Glyph="&#xE9F9;" FontSize="16" Width="20"/>
-                            <StackPanel>
-                                <TextBlock Text="Export Report" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Save last batch results as CSV" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <Button x:Name="BtnBatchRemove" Click="BatchRemove_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE74D;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Batch Remove Pages" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Same pages from all PDFs" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
-                    </Button>
+                        </Button>
+
+                        <Button x:Name="BtnBatchRotate" Click="BatchRotate_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE7AD;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Batch Rotate" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Rotate all / selected PDFs" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="BtnBatchToImages" Click="BatchPdfImages_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xEB9F;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="Batch PDF to Images" FontSize="13" FontWeight="SemiBold"/>
+                                        <Border Background="{StaticResource ProGoldLightBrush}"
+                                                CornerRadius="4" Padding="5,1">
+                                            <TextBlock Text="PRO" FontSize="9" FontWeight="Bold"
+                                                       Foreground="{StaticResource ProGoldBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Export pages from all PDFs" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="BtnExportReport" Click="ExportReport_Click" IsEnabled="False"
+                                Style="{StaticResource ActionButtonStyle}"
+                                Margin="0,8,0,0">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE9F9;" FontSize="16" Width="20"/>
+                                <StackPanel>
+                                    <TextBlock Text="Export Report" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Save last batch results as CSV" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
 
                 </StackPanel>
             </ScrollViewer>

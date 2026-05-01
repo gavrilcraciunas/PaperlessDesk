@@ -452,6 +452,118 @@ public sealed partial class DocxView : UserControl
     // ── HTML → DOCX save-back ─────────────────────────────────────────────────
 
     /// <summary>
+    /// Opens a DOCX file and converts its body content to an editable HTML page string.
+    /// </summary>
+    private static string ConvertDocxToHtml(string path)
+    {
+        var sb = new StringBuilder();
+        sb.Append("<!DOCTYPE html><html><head><meta charset='utf-8'>" +
+                  "<style>body{font-family:Calibri,sans-serif;font-size:11pt;margin:20px;}" +
+                  "h1{font-size:2em}h2{font-size:1.5em}h3{font-size:1.17em}" +
+                  "h4{font-size:1em}h5{font-size:.83em}h6{font-size:.67em}</style></head>" +
+                  "<body contenteditable='true'>");
+
+        using var wdoc = WordprocessingDocument.Open(path, false);
+        var body = wdoc.MainDocumentPart?.Document?.Body;
+        if (body is not null)
+        {
+            foreach (var elem in body.Elements())
+            {
+                if (elem is Paragraph para)
+                {
+                    sb.Append(ParagraphToHtml(para));
+                }
+                else if (elem is DocumentFormat.OpenXml.Wordprocessing.Table table)
+                {
+                    sb.Append("<table border='1' style='border-collapse:collapse;width:100%'>");
+                    foreach (var row in table.Elements<TableRow>())
+                    {
+                        sb.Append("<tr>");
+                        foreach (var cell in row.Elements<TableCell>())
+                        {
+                            sb.Append("<td style='padding:4px'>");
+                            foreach (var cp in cell.Elements<Paragraph>())
+                                sb.Append(ParagraphToHtml(cp));
+                            sb.Append("</td>");
+                        }
+                        sb.Append("</tr>");
+                    }
+                    sb.Append("</table>");
+                }
+            }
+        }
+
+        sb.Append("</body></html>");
+        return sb.ToString();
+    }
+
+    private static string ParagraphToHtml(Paragraph para)
+    {
+        var pPr = para.ParagraphProperties;
+        var styleId = pPr?.ParagraphStyleId?.Val?.Value?.ToLowerInvariant() ?? "";
+        string tag = styleId switch
+        {
+            "heading1" => "h1", "heading2" => "h2", "heading3" => "h3",
+            "heading4"  => "h4", "heading5"  => "h5", "heading6"  => "h6",
+            _ => "p"
+        };
+
+        var alignAttr = "";
+        var jc = pPr?.Justification?.Val;
+        if (jc is not null)
+        {
+            var jcStr = jc.Value.ToString();
+            if (jcStr == JustificationValues.Center.ToString())
+                alignAttr = " style='text-align:center'";
+            else if (jcStr == JustificationValues.Right.ToString())
+                alignAttr = " style='text-align:right'";
+            else if (jcStr == JustificationValues.Both.ToString())
+                alignAttr = " style='text-align:justify'";
+        }
+
+        var inner = new StringBuilder();
+        foreach (var run in para.Elements<Run>())
+        {
+            var rPr = run.RunProperties;
+            bool bold      = rPr?.Bold != null;
+            bool italic    = rPr?.Italic != null;
+            bool underline = rPr?.Underline != null;
+            bool strike    = rPr?.Strike != null;
+            var fontName   = rPr?.RunFonts?.Ascii?.Value;
+            var fontSizeHH = rPr?.FontSize?.Val?.Value; // half-points
+            var color      = rPr?.Color?.Val?.Value;
+
+            var style = new StringBuilder();
+            if (!string.IsNullOrEmpty(fontName))  style.Append($"font-family:'{fontName}';");
+            if (!string.IsNullOrEmpty(fontSizeHH) && int.TryParse(fontSizeHH, out int hh))
+                style.Append($"font-size:{hh / 2}pt;");
+            if (!string.IsNullOrEmpty(color) && color != "auto")
+                style.Append($"color:#{color};");
+            if (bold)      style.Append("font-weight:bold;");
+            if (italic)    style.Append("font-style:italic;");
+            if (underline) style.Append("text-decoration:underline;");
+            if (strike)    style.Append("text-decoration:line-through;");
+
+            var text = string.Concat(run.Elements<DocumentFormat.OpenXml.Wordprocessing.Text>()
+                .Select(t => t.Text))
+                .Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
+            // Handle line breaks
+            var brCount = run.Elements<Break>().Count();
+            for (int b = 0; b < brCount; b++) inner.Append("<br>");
+
+            if (string.IsNullOrEmpty(text) && brCount == 0) continue;
+
+            if (style.Length > 0)
+                inner.Append($"<span style='{style}'>{text}</span>");
+            else
+                inner.Append(text);
+        }
+
+        return $"<{tag}{alignAttr}>{inner}</{tag}>";
+    }
+
+    /// <summary>
     /// Opens the original DOCX, clears the body, and writes back paragraphs/tables
     /// that were edited in the WebView2 contenteditable HTML.
     /// The strategy: preserve all non-body parts (styles, numbering, images, etc.)
@@ -636,7 +748,15 @@ public sealed partial class DocxView : UserControl
         return any ? pPr : null;
     }
 
-    // ── Tokenizer ─────────────────────────────────────────────────────────────
+    private static int CountOccurrences(string text, string find)
+    {
+        int count = 0, idx = 0;
+        while ((idx = text.IndexOf(find, idx, StringComparison.Ordinal)) >= 0)
+        { count++; idx += find.Length; }
+        return count;
+    }
+
+    // ── Tokenizer (used by ParseHtmlToBody for save-back) ────────────────────
 
     private record HtmlToken(bool IsTag, string Tag, string Text);
 
@@ -656,10 +776,7 @@ public sealed partial class DocxView : UserControl
                 tokens.Add(new(true, tag, ""));
                 i = end + 1;
             }
-            else
-            {
-                sb.Append(html[i++]);
-            }
+            else { sb.Append(html[i++]); }
         }
         if (sb.Length > 0) tokens.Add(new(false, "", sb.ToString()));
         return tokens;
@@ -669,7 +786,7 @@ public sealed partial class DocxView : UserControl
         text.Replace("&amp;", "&").Replace("&lt;", "<").Replace("&gt;", ">")
             .Replace("&quot;", "\"").Replace("&nbsp;", " ").Replace("\u00a0", " ");
 
-    // ── Inline style record ───────────────────────────────────────────────────
+    // ── Inline style record (used by ParseHtmlToBody for save-back) ──────────
 
     private record InlineStyle
     {
@@ -684,14 +801,14 @@ public sealed partial class DocxView : UserControl
 
         public InlineStyle Merge(InlineStyle other) => new()
         {
-            Bold      = Bold      || other.Bold,
-            Italic    = Italic    || other.Italic,
-            Underline = Underline || other.Underline,
-            Strike    = Strike    || other.Strike,
-            FontName  = other.FontName  ?? FontName,
-            FontSizePt= other.FontSizePt != 0 ? other.FontSizePt : FontSizePt,
-            Color     = other.Color  ?? Color,
-            Align     = other.Align  ?? Align
+            Bold       = Bold      || other.Bold,
+            Italic     = Italic    || other.Italic,
+            Underline  = Underline || other.Underline,
+            Strike     = Strike    || other.Strike,
+            FontName   = other.FontName   ?? FontName,
+            FontSizePt = other.FontSizePt != 0 ? other.FontSizePt : FontSizePt,
+            Color      = other.Color  ?? Color,
+            Align      = other.Align  ?? Align
         };
 
         public static InlineStyle FromTagAttributes(string tag)
@@ -707,11 +824,11 @@ public sealed partial class DocxView : UserControl
                 var val  = kv[1].Trim();
                 st = prop switch
                 {
-                    "font-weight"     => val.Contains("bold") ? st with { Bold = true } : st,
-                    "font-style"      => val.Contains("italic") ? st with { Italic = true } : st,
-                    "text-decoration" => val.Contains("underline") ? st with { Underline = true }
-                                      : val.Contains("line-through") ? st with { Strike = true } : st,
-                    "font-family"     => st with { FontName = val.Trim('\'', '"').Split(',')[0].Trim() },
+                    "font-weight"     => val.Contains("bold")        ? st with { Bold = true }      : st,
+                    "font-style"      => val.Contains("italic")      ? st with { Italic = true }    : st,
+                    "text-decoration" => val.Contains("underline")   ? st with { Underline = true } :
+                                        val.Contains("line-through") ? st with { Strike = true }    : st,
+                    "font-family"     => st with { FontName  = val.Trim('\'', '"').Split(',')[0].Trim() },
                     "font-size"       => ParseFontSize(val) is int pt ? st with { FontSizePt = pt } : st,
                     "color"           => st with { Color = val.TrimStart('#') },
                     "text-align"      => st with { Align = val },
@@ -751,10 +868,10 @@ public sealed partial class DocxView : UserControl
         {
             var rPr = new RunProperties();
             bool any = false;
-            if (Bold)      { rPr.AppendChild(new Bold()); any = true; }
-            if (Italic)    { rPr.AppendChild(new Italic()); any = true; }
+            if (Bold)      { rPr.AppendChild(new Bold());    any = true; }
+            if (Italic)    { rPr.AppendChild(new Italic());  any = true; }
             if (Underline) { rPr.AppendChild(new Underline { Val = UnderlineValues.Single }); any = true; }
-            if (Strike)    { rPr.AppendChild(new Strike()); any = true; }
+            if (Strike)    { rPr.AppendChild(new Strike());  any = true; }
             if (!string.IsNullOrEmpty(FontName))
             {
                 rPr.AppendChild(new RunFonts { Ascii = FontName, HighAnsi = FontName });
@@ -773,467 +890,5 @@ public sealed partial class DocxView : UserControl
             }
             return any ? rPr : null;
         }
-    }
-
-    // ── OpenXml → HTML converter ──────────────────────────────────────────────
-
-    private static string ConvertDocxToHtml(string docxPath)
-    {
-        using var wdoc = WordprocessingDocument.Open(docxPath, false);
-        var mainPart = wdoc.MainDocumentPart;
-        var body = mainPart?.Document?.Body;
-        if (body is null) return "<html><body><p>Unable to read document.</p></body></html>";
-
-        // Collect numbering definitions for list rendering
-        var numbering = mainPart?.NumberingDefinitionsPart?.Numbering;
-
-        // Collect styles
-        var styles = mainPart?.StyleDefinitionsPart?.Styles;
-
-        var sb = new StringBuilder();
-        sb.Append("""
-            <!DOCTYPE html>
-            <html>
-            <head>
-            <meta charset="utf-8"/>
-            <style>
-              body { font-family: Calibri, Arial, sans-serif; font-size: 11pt;
-                       margin: 40px 60px; color: #000; background: #fff; line-height: 1.4;
-                       outline: none; }
-                p    { margin: 0 0 6px 0; }
-              h1   { font-size: 20pt; font-weight: bold; margin: 16px 0 6px; }
-              h2   { font-size: 16pt; font-weight: bold; margin: 14px 0 6px; }
-              h3   { font-size: 14pt; font-weight: bold; margin: 12px 0 4px; }
-              h4   { font-size: 12pt; font-weight: bold; margin: 10px 0 4px; }
-              h5   { font-size: 11pt; font-weight: bold; margin: 8px 0 4px; }
-              h6   { font-size: 10pt; font-weight: bold; margin: 8px 0 4px; }
-              table { border-collapse: collapse; margin: 8px 0; max-width: 100%; width: auto; }
-              td, th { border: 1px solid #999; padding: 4px 8px; vertical-align: top; min-width: 30px; }
-              tr:first-child td, tr:first-child th { background-color: #f7f7f7; }
-              ul, ol { margin: 4px 0 4px 24px; padding: 0; }
-              li   { margin-bottom: 2px; }
-              img  { max-width: 100%; height: auto; }
-              .page-break { border-top: 2px dashed #ccc; margin: 24px 0; }
-            </style>
-            </head>
-            <body contenteditable="true" spellcheck="true">
-            """);
-
-        foreach (var element in body.ChildElements)
-        {
-            RenderElement(element, sb, mainPart, styles, numbering);
-        }
-
-        sb.Append("</body></html>");
-        return sb.ToString();
-    }
-
-    private static void RenderElement(
-        DocumentFormat.OpenXml.OpenXmlElement element,
-        StringBuilder sb,
-        MainDocumentPart? mainPart,
-        Styles? styles,
-        Numbering? numbering)
-    {
-        if (element is Paragraph para)
-        {
-            RenderParagraph(para, sb, mainPart, styles, numbering);
-        }
-        else if (element is DocumentFormat.OpenXml.Wordprocessing.Table tbl)
-        {
-            RenderTable(tbl, sb, mainPart, styles, numbering);
-        }
-        else if (element is SectionProperties)
-        {
-            // skip
-        }
-        else
-        {
-            // recurse into unknown containers
-            foreach (var child in element.ChildElements)
-                RenderElement(child, sb, mainPart, styles, numbering);
-        }
-    }
-
-    private static void RenderParagraph(
-        Paragraph para,
-        StringBuilder sb,
-        MainDocumentPart? mainPart,
-        Styles? styles,
-        Numbering? numbering)
-    {
-        var pPr = para.ParagraphProperties;
-        var styleId = pPr?.ParagraphStyleId?.Val?.Value ?? "Normal";
-        var numPr = pPr?.NumberingProperties;
-
-        // Resolve heading level
-        var tag = ResolveHeadingTag(styleId, styles);
-
-        // List item?
-        bool isList = numPr?.NumberingId?.Val is not null;
-
-        // Paragraph style attributes
-        var paraStyle = BuildParaStyle(pPr);
-
-        if (isList)
-        {
-            bool isOrdered = IsOrderedList(numPr!, numbering);
-            sb.Append(isOrdered ? "<ol><li" : "<ul><li");
-            if (!string.IsNullOrEmpty(paraStyle)) sb.Append($" style=\"{paraStyle}\"");
-            sb.Append('>');
-            AppendRunContent(para, sb, mainPart);
-            sb.Append(isOrdered ? "</li></ol>" : "</li></ul>");
-        }
-        else if (tag != "p")
-        {
-            sb.Append($"<{tag}>");
-            AppendRunContent(para, sb, mainPart);
-            sb.Append($"</{tag}>");
-        }
-        else
-        {
-            sb.Append("<p");
-            if (!string.IsNullOrEmpty(paraStyle)) sb.Append($" style=\"{paraStyle}\"");
-            sb.Append('>');
-
-            // Check for page break
-            bool hasPageBreak = para.Descendants<Break>()
-                .Any(b => b.Type?.Value == BreakValues.Page);
-            if (hasPageBreak)
-                sb.Append("<div class=\"page-break\"></div>");
-
-            AppendRunContent(para, sb, mainPart);
-            sb.Append("</p>");
-        }
-    }
-
-    private static void AppendRunContent(
-        Paragraph para,
-        StringBuilder sb,
-        MainDocumentPart? mainPart)
-    {
-        bool anyContent = false;
-        foreach (var child in para.ChildElements)
-        {
-            if (child is Run run)
-            {
-                anyContent = true;
-                RenderRun(run, sb, mainPart);
-            }
-            else if (child is Hyperlink hl)
-            {
-                anyContent = true;
-                string url = "";
-                if (hl.Id?.Value is string relId && mainPart is not null)
-                {
-                    try { url = mainPart.HyperlinkRelationships
-                            .FirstOrDefault(r => r.Id == relId)?.Uri?.ToString() ?? ""; }
-                    catch { }
-                }
-                sb.Append(string.IsNullOrEmpty(url) ? "<span>" : $"<a href=\"{HtmlEncode(url)}\">");
-                foreach (var hlRun in hl.Descendants<Run>())
-                    RenderRun(hlRun, sb, mainPart);
-                sb.Append(string.IsNullOrEmpty(url) ? "</span>" : "</a>");
-                anyContent = true;
-            }
-        }
-        if (!anyContent) sb.Append("&nbsp;");
-    }
-
-    private static void RenderRun(Run run, StringBuilder sb, MainDocumentPart? mainPart)
-    {
-        // Check for image
-        var drawing = run.Descendants<DocumentFormat.OpenXml.Wordprocessing.Drawing>().FirstOrDefault();
-        if (drawing is not null)
-        {
-            RenderImage(drawing, sb, mainPart);
-            return;
-        }
-
-        var rPr = run.RunProperties;
-        var style = BuildRunStyle(rPr);
-
-        if (!string.IsNullOrEmpty(style)) sb.Append($"<span style=\"{style}\">");
-
-        foreach (var child in run.ChildElements)
-        {
-            if (child is DocumentFormat.OpenXml.Wordprocessing.Text txt)
-                sb.Append(HtmlEncode(txt.Text));
-            else if (child is Break br && br.Type?.Value == BreakValues.TextWrapping)
-                sb.Append("<br/>");
-            else if (child is DocumentFormat.OpenXml.Wordprocessing.TabChar)
-                sb.Append("&nbsp;&nbsp;&nbsp;&nbsp;");
-        }
-
-        if (!string.IsNullOrEmpty(style)) sb.Append("</span>");
-    }
-
-    private static void RenderImage(
-        DocumentFormat.OpenXml.Wordprocessing.Drawing drawing,
-        StringBuilder sb,
-        MainDocumentPart? mainPart)
-    {
-        if (mainPart is null) return;
-        try
-        {
-            var blip = drawing.Descendants<DocumentFormat.OpenXml.Drawing.Blip>().FirstOrDefault();
-            if (blip?.Embed?.Value is string embedId)
-            {
-                var imgPart = mainPart.GetPartById(embedId) as ImagePart;
-                if (imgPart is not null)
-                {
-                    using var stream = imgPart.GetStream();
-                    using var ms = new MemoryStream();
-                    stream.CopyTo(ms);
-                    var b64 = Convert.ToBase64String(ms.ToArray());
-                    var mime = imgPart.ContentType;
-                    sb.Append($"<img src=\"data:{mime};base64,{b64}\"/>");
-                }
-            }
-        }
-        catch { /* skip unreadable images */ }
-    }
-
-    private static void RenderTable(
-        DocumentFormat.OpenXml.Wordprocessing.Table tbl,
-        StringBuilder sb,
-        MainDocumentPart? mainPart,
-        Styles? styles,
-        Numbering? numbering)
-    {
-        // Read table-level grid widths for column sizing
-        var gridCols = tbl.Descendants<TableGrid>().FirstOrDefault()
-            ?.Elements<GridColumn>()
-            .Select(gc => gc.Width?.Value is string w && int.TryParse(w, out int tw) ? tw : 1440)
-            .ToList();
-
-        sb.Append("<table>");
-
-        // Add colgroup for column widths
-        if (gridCols is { Count: > 0 })
-        {
-            sb.Append("<colgroup>");
-            foreach (var w in gridCols)
-                sb.Append($"<col style=\"width:{w / 20}pt\">");
-            sb.Append("</colgroup>");
-        }
-
-        // Use Elements<> (direct children only) to avoid double-rendering nested tables
-        foreach (var row in tbl.Elements<TableRow>())
-        {
-            sb.Append("<tr>");
-            foreach (var cell in row.Elements<TableCell>())
-            {
-                var tcPr = cell.TableCellProperties;
-
-                // Skip cells that are vertical merge continuations
-                if (tcPr?.VerticalMerge is VerticalMerge vm &&
-                    vm.Val?.Value != MergedCellValues.Restart)
-                    continue;
-
-                // Cell shading
-                var shade = tcPr?.Shading?.Fill?.Value;
-                var styleAttrs = new List<string>();
-                if (!string.IsNullOrEmpty(shade) && shade != "auto" && shade != "FFFFFF")
-                    styleAttrs.Add($"background:#{shade}");
-
-                // Cell text direction / alignment
-                var vAlign = tcPr?.TableCellVerticalAlignment?.Val?.Value;
-                if (vAlign == TableVerticalAlignmentValues.Center)
-                    styleAttrs.Add("vertical-align:middle");
-                else if (vAlign == TableVerticalAlignmentValues.Bottom)
-                    styleAttrs.Add("vertical-align:bottom");
-
-                // Build colspan/rowspan attributes
-                var spanAttrs = "";
-                if (tcPr?.GridSpan?.Val?.Value is int cs && cs > 1)
-                    spanAttrs += $" colspan=\"{cs}\"";
-                if (tcPr?.VerticalMerge?.Val?.Value == MergedCellValues.Restart)
-                {
-                    // Count how many rows this cell spans
-                    int rowspan = CountVerticalMerge(tbl, row, cell);
-                    if (rowspan > 1) spanAttrs += $" rowspan=\"{rowspan}\"";
-                }
-
-                var styleAttr = styleAttrs.Count > 0 ? $" style=\"{string.Join(";", styleAttrs)}\"" : "";
-                sb.Append($"<td{spanAttrs}{styleAttr}>");
-
-                foreach (var cp in cell.Elements<Paragraph>())
-                    RenderParagraph(cp, sb, mainPart, styles, numbering);
-
-                // Render nested tables
-                foreach (var cp in cell.Elements<DocumentFormat.OpenXml.Wordprocessing.Table>())
-                    RenderTable(cp, sb, mainPart, styles, numbering);
-
-                sb.Append("</td>");
-            }
-            sb.Append("</tr>");
-        }
-        sb.Append("</table>");
-    }
-
-    private static int CountVerticalMerge(
-        DocumentFormat.OpenXml.Wordprocessing.Table tbl,
-        TableRow startRow,
-        TableCell startCell)
-    {
-        // Find the column index of the starting cell
-        int colIdx = 0;
-        foreach (var c in startRow.Elements<TableCell>())
-        {
-            if (c == startCell) break;
-            colIdx += c.TableCellProperties?.GridSpan?.Val?.Value ?? 1;
-        }
-
-        int count = 1;
-        bool found = false;
-        foreach (var row in tbl.Elements<TableRow>())
-        {
-            if (!found) { if (row == startRow) found = true; continue; }
-            int ci = 0;
-            foreach (var cell in row.Elements<TableCell>())
-            {
-                if (ci == colIdx)
-                {
-                    if (cell.TableCellProperties?.VerticalMerge is VerticalMerge vm2 &&
-                        vm2.Val is null) // continuation (no Val or empty)
-                        count++;
-                    else return count;
-                    break;
-                }
-                ci += cell.TableCellProperties?.GridSpan?.Val?.Value ?? 1;
-            }
-        }
-        return count;
-    }
-
-    // ── Style helpers ─────────────────────────────────────────────────────────
-
-    private static string ResolveHeadingTag(string styleId, Styles? styles)
-    {
-        // Try to match by style ID or name
-        if (styleId.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) ||
-            styleId.StartsWith("heading", StringComparison.OrdinalIgnoreCase))
-        {
-            if (int.TryParse(styleId.AsSpan(styleId.Length - 1), out int lvl) && lvl >= 1 && lvl <= 6)
-                return $"h{lvl}";
-        }
-        if (styles is not null)
-        {
-            var st = styles.Descendants<DocumentFormat.OpenXml.Wordprocessing.Style>()
-                .FirstOrDefault(s => s.StyleId?.Value == styleId);
-            var name = st?.StyleName?.Val?.Value ?? "";
-            if (name.Equals("heading 1", StringComparison.OrdinalIgnoreCase)) return "h1";
-            if (name.Equals("heading 2", StringComparison.OrdinalIgnoreCase)) return "h2";
-            if (name.Equals("heading 3", StringComparison.OrdinalIgnoreCase)) return "h3";
-            if (name.Equals("heading 4", StringComparison.OrdinalIgnoreCase)) return "h4";
-            if (name.Equals("heading 5", StringComparison.OrdinalIgnoreCase)) return "h5";
-            if (name.Equals("heading 6", StringComparison.OrdinalIgnoreCase)) return "h6";
-        }
-        return "p";
-    }
-
-    private static string BuildParaStyle(ParagraphProperties? pPr)
-    {
-        if (pPr is null) return "";
-        var parts = new List<string>();
-
-        var jc = pPr.Justification?.Val?.Value;
-        if (jc == JustificationValues.Center)       parts.Add("text-align:center");
-        else if (jc == JustificationValues.Right)   parts.Add("text-align:right");
-        else if (jc == JustificationValues.Both)    parts.Add("text-align:justify");
-
-        var spacing = pPr.SpacingBetweenLines;
-        if (spacing?.Before?.Value is string before && int.TryParse(before, out int bVal))
-            parts.Add($"margin-top:{bVal / 20}pt");
-        if (spacing?.After?.Value is string after && int.TryParse(after, out int aVal))
-            parts.Add($"margin-bottom:{aVal / 20}pt");
-
-        var indent = pPr.Indentation;
-        if (indent?.Left?.Value is string left && int.TryParse(left, out int lVal))
-            parts.Add($"margin-left:{lVal / 20}pt");
-
-        return string.Join(";", parts);
-    }
-
-    private static string BuildRunStyle(RunProperties? rPr)
-    {
-        if (rPr is null) return "";
-        var parts = new List<string>();
-
-        if (rPr.Bold is not null && rPr.Bold?.Val?.Value != false)
-            parts.Add("font-weight:bold");
-        if (rPr.Italic is not null && rPr.Italic?.Val?.Value != false)
-            parts.Add("font-style:italic");
-        if (rPr.Underline is not null && rPr.Underline.Val?.Value != UnderlineValues.None)
-            parts.Add("text-decoration:underline");
-        if (rPr.Strike is not null && rPr.Strike?.Val?.Value != false)
-            parts.Add("text-decoration:line-through");
-
-        if (rPr.FontSize?.Val?.Value is string sizeVal &&
-            int.TryParse(sizeVal, out int halfPts))
-            parts.Add($"font-size:{halfPts / 2}pt");
-
-        if (rPr.RunFonts?.Ascii?.Value is string font)
-            parts.Add($"font-family:'{font}',sans-serif");
-
-        if (rPr.Color?.Val?.Value is string color && color != "auto")
-            parts.Add($"color:#{color}");
-
-        if (rPr.Highlight?.Val?.Value is HighlightColorValues hc)
-        {
-            var bg = "";
-            if      (hc == HighlightColorValues.Yellow)      bg = "#ffff00";
-            else if (hc == HighlightColorValues.Green)       bg = "#00ff00";
-            else if (hc == HighlightColorValues.Cyan)        bg = "#00ffff";
-            else if (hc == HighlightColorValues.Magenta)     bg = "#ff00ff";
-            else if (hc == HighlightColorValues.Blue)        bg = "#0000ff";
-            else if (hc == HighlightColorValues.Red)         bg = "#ff0000";
-            else if (hc == HighlightColorValues.DarkBlue)    bg = "#00008b";
-            else if (hc == HighlightColorValues.DarkCyan)    bg = "#008b8b";
-            else if (hc == HighlightColorValues.DarkGreen)   bg = "#006400";
-            else if (hc == HighlightColorValues.DarkMagenta) bg = "#8b008b";
-            else if (hc == HighlightColorValues.DarkRed)     bg = "#8b0000";
-            else if (hc == HighlightColorValues.DarkYellow)  bg = "#808000";
-            else if (hc == HighlightColorValues.DarkGray)    bg = "#a9a9a9";
-            else if (hc == HighlightColorValues.LightGray)   bg = "#d3d3d3";
-            if (!string.IsNullOrEmpty(bg)) parts.Add($"background-color:{bg}");
-        }
-
-        if (rPr.VerticalTextAlignment?.Val?.Value == VerticalPositionValues.Superscript)
-            parts.Add("vertical-align:super;font-size:smaller");
-        else if (rPr.VerticalTextAlignment?.Val?.Value == VerticalPositionValues.Subscript)
-            parts.Add("vertical-align:sub;font-size:smaller");
-
-        return string.Join(";", parts);
-    }
-
-    private static bool IsOrderedList(NumberingProperties numPr, Numbering? numbering)
-    {
-        if (numbering is null || numPr.NumberingId?.Val is null) return false;
-        var numId = numPr.NumberingId.Val.Value;
-        var ilvl  = numPr.NumberingLevelReference?.Val?.Value ?? 0;
-        var num   = numbering.Descendants<NumberingInstance>()
-                        .FirstOrDefault(n => n.NumberID?.Value == numId);
-        if (num is null) return false;
-        var abstractNumId = num.AbstractNumId?.Val?.Value;
-        var abstractNum   = numbering.Descendants<AbstractNum>()
-                        .FirstOrDefault(a => a.AbstractNumberId?.Value == abstractNumId);
-        var lvl = abstractNum?.Descendants<Level>()
-                        .FirstOrDefault(l => l.LevelIndex?.Value == ilvl);
-        var numFmt = lvl?.NumberingFormat?.Val?.Value;
-        return numFmt != NumberFormatValues.Bullet;
-    }
-
-    private static string HtmlEncode(string text) =>
-        text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
-            .Replace("\"", "&quot;");
-
-    private static int CountOccurrences(string text, string find)
-    {
-        int count = 0, idx = 0;
-        while ((idx = text.IndexOf(find, idx, StringComparison.Ordinal)) >= 0)
-        { count++; idx += find.Length; }
-        return count;
     }
 }

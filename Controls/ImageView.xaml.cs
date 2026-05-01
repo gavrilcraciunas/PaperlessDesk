@@ -17,6 +17,14 @@ public sealed partial class ImageView : UserControl
         _win = win;
     }
 
+    // ── Public invoke entry points (for Features flyout in MainWindow) ─────────
+
+    public void InvokeResize()      => Resize_Click(this, new RoutedEventArgs());
+    public void InvokeCrop()        => Crop_Click(this, new RoutedEventArgs());
+    public void InvokeRotateCW()    => RotateCW_Click(this, new RoutedEventArgs());
+    public void InvokeGrayscale()   => Grayscale_Click(this, new RoutedEventArgs());
+    public void InvokeImagesToPdf() => ImagesToPdf_Click(this, new RoutedEventArgs());
+
     // ── Load / Unload ─────────────────────────────────────────────────────────
 
     public async void LoadFile(string path)
@@ -65,6 +73,9 @@ public sealed partial class ImageView : UserControl
     private XamlRoot Root => Content.XamlRoot;
     private bool Pro(string f) => ViewHelpers.RequirePro(Root, License, f);
 
+    private Task Run(string title, Func<IProgress<(int, int, string)>, CancellationToken, Task> work)
+        => ViewHelpers.Run(Root, title, work, _win as MainWindow);
+
     private async Task ApplyTransform(string op,
         uint? newW = null, uint? newH = null,
         uint cropX = 0, uint cropY = 0, uint cropW = 0, uint cropH = 0)
@@ -76,7 +87,7 @@ public sealed partial class ImageView : UserControl
             $"{Path.GetFileNameWithoutExtension(_currentFilePath)}_edited{outExt}", outExt);
         if (out_ is null) return;
 
-        await ViewHelpers.Run(Root, "Processing image…", async (_, ct) =>
+        await Run("Processing image…", async (_, ct) =>
         {
             var file = await StorageFile.GetFileFromPathAsync(_currentFilePath);
             using var inStream = await file.OpenReadAsync();
@@ -184,7 +195,7 @@ public sealed partial class ImageView : UserControl
         if (images.Count == 0) { await ViewHelpers.Info(Root, "Images → PDF", "Select at least one image."); return; }
         var out_ = await ViewHelpers.SaveFile(_win, "images.pdf", ".pdf"); if (out_ is null) return;
         ImagesToPdfResult? result = null;
-        await ViewHelpers.Run(Root, $"Creating PDF from {images.Count} image(s)…", async (prog, ct) =>
+        await Run($"Creating PDF from {images.Count} image(s)…", async (prog, ct) =>
         {
             result = await Convert.ImagesToPdfAsync(images.Select(f => f.FilePath), out_, progress: prog, ct: ct);
         });

@@ -94,21 +94,11 @@ public class PdfConvertService
                 double imgWidth = decoder.PixelWidth;
                 double imgHeight = decoder.PixelHeight;
 
-                // Create new page in output, embed image
-                stream.Seek(0);
-                var imgReader = new Windows.Storage.Streams.DataReader(stream.GetInputStreamAt(0));
-                await imgReader.LoadAsync((uint)stream.Size);
-                var pngBytes = new byte[stream.Size];
-                imgReader.ReadBytes(pngBytes);
-
-                // Transcode to JPEG for embedding
-                stream.Seek(0);
-                var bmpDecoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
-                var bmpSource = await bmpDecoder.GetSoftwareBitmapAsync();
+                // Transcode to JPEG for embedding — reuse the softwareBitmap already decoded above
                 using var jpegStream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
                 var encoder = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
                     Windows.Graphics.Imaging.BitmapEncoder.JpegEncoderId, jpegStream);
-                encoder.SetSoftwareBitmap(bmpSource);
+                encoder.SetSoftwareBitmap(softwareBitmap);
                 await encoder.FlushAsync();
 
                 var jpegReader = new Windows.Storage.Streams.DataReader(jpegStream.GetInputStreamAt(0));
